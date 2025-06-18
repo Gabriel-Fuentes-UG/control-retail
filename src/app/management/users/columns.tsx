@@ -1,4 +1,4 @@
-// src/app/admin/users/columns.tsx
+// src/app/management/users/columns.tsx
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
@@ -7,9 +7,7 @@ import UserActionButtons from "./UserActionButtons";
 import Link from "next/link";
 import { Button } from "react-bootstrap";
 
-
-// Definimos un tipo que incluye las relaciones que cargamos
-// Esta es la versión corregida y más completa
+// Definición de tipo corregida para incluir todos los datos necesarios
 type UserWithRelations = User & {
     role: Role;
     store: Store | null;
@@ -34,13 +32,11 @@ export const columns: ColumnDef<UserWithRelations>[] = [
   {
     id: 'tienda',
     header: 'Tienda Asignada',
-    // Celda personalizada para mostrar la tienda correcta
     cell: ({ row }) => {
         const user = row.original;
         if (user.role.name === 'SUPERVISOR' && user.supervisedStores.length > 0) {
             return (
               <ul className="list-unstyled mb-0">
-                {/* Usamos ss.store.id porque ahora el tipo es correcto */}
                 {user.supervisedStores.map(ss => <li key={ss.store.id}>{ss.store.name}</li>)}
               </ul>
             );
@@ -63,8 +59,8 @@ export const columns: ColumnDef<UserWithRelations>[] = [
         return user.role.name !== 'ADMINISTRADOR' ? (
           <UserActionButtons user={user} />
         ) : (
-          <Link href={`/admin/users/edit/${user.id}`} passHref legacyBehavior>
-            <Button as="a" variant="secondary" size="sm">Editar</Button>
+          <Link href={`/management/users/edit/${user.id}`}>
+            <Button variant="secondary" size="sm">Editar</Button>
           </Link>
         );
     }

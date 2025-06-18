@@ -2,10 +2,10 @@
 
 import { getSyncedStores } from "@/lib/data/stores";
 import { prisma } from "@/lib/prisma";
-import UserForm from "@/app/admin/users/new/UserForm";
+import UserForm from "@/app/management/users/new/UserForm";
 import Breadcrumbs from "@/components/layout/Breadcrumbs";
 import { notFound } from "next/navigation";
-import { updateUserAction } from "../../actions";
+import { updateUserAction } from "../actions";
 
 // La firma del componente indica que `params` es una Promesa
 export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {

@@ -32,7 +32,6 @@ export default async function ColaboradorLayout({
           <SideNav />
         </div>
       </div>
-
       <main className={styles.mainContent + " flex-grow-1"}>
           <header className={styles.pageHeader}>
             <span>Bienvenido, {session.user?.name}</span>

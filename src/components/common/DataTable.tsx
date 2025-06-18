@@ -14,13 +14,14 @@ import {
 } from '@tanstack/react-table';
 import { Table, Button, Form, InputGroup } from 'react-bootstrap';
 
-// Hacemos el componente genérico para que funcione con cualquier tipo de dato
-type DataTableProps<TData, TValue> = {
-  columns: ColumnDef<TData, TValue>[];
+// CORRECCIÓN: Simplificamos los tipos genéricos. Solo necesitamos TData.
+// Usamos 'any' para el tipo de valor de la columna para máxima flexibilidad.
+type DataTableProps<TData> = {
+  columns: ColumnDef<TData, any>[];
   data: TData[];
 };
 
-export default function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+export default function DataTable<TData>({ columns, data }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
 
@@ -39,14 +40,13 @@ export default function DataTable<TData, TValue>({ columns, data }: DataTablePro
     onGlobalFilterChange: setGlobalFilter,
     initialState: {
         pagination: {
-            pageSize: 15, // Paginación cada 15 usuarios como pediste
+            pageSize: 15,
         }
     }
   });
 
   return (
     <div>
-      {/* Barra de Búsqueda */}
       <InputGroup className="mb-3" style={{ maxWidth: '400px' }}>
         <InputGroup.Text>Buscar:</InputGroup.Text>
         <Form.Control
@@ -56,15 +56,13 @@ export default function DataTable<TData, TValue>({ columns, data }: DataTablePro
         />
       </InputGroup>
 
-      {/* Tabla Principal */}
       <Table striped bordered hover responsive>
         <thead>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map(header => (
-                <th key={header.id} onClick={header.column.getToggleSortingHandler()}>
+                <th key={header.id} onClick={header.column.getToggleSortingHandler()} style={{ cursor: 'pointer' }}>
                   {flexRender(header.column.columnDef.header, header.getContext())}
-                  {/* Lógica para mostrar ícono de ordenamiento */}
                   {{
                     asc: ' 🔼',
                     desc: ' 🔽',
@@ -87,7 +85,6 @@ export default function DataTable<TData, TValue>({ columns, data }: DataTablePro
         </tbody>
       </Table>
 
-      {/* Controles de Paginación */}
       <div className="d-flex justify-content-center align-items-center gap-2 mt-3">
         <Button onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
           {'<<'}

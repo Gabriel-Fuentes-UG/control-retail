@@ -28,7 +28,7 @@ export default function UserActionButtons({ user }: { user: User }) {
     <>
       <div className="d-flex gap-2">
         {/* CAMBIO 3: Nuevo patrón para el Link/Button */}
-        <Link href={`/admin/users/edit/${user.id}`} passHref>
+        <Link href={`/admin/users/edit/${user.id}`} passHref legacyBehavior>
           <Button variant="secondary" size="sm">
             Editar
           </Button>
@@ -45,7 +45,6 @@ export default function UserActionButtons({ user }: { user: User }) {
           </Button>
         </form>
       </div>
-
       {/* MODAL PARA ACTIVAR/DESACTIVAR */}
       <Modal show={showToggleStatusModal} onHide={() => setShowToggleStatusModal(false)} centered>
         <Modal.Header closeButton>
@@ -70,7 +69,6 @@ export default function UserActionButtons({ user }: { user: User }) {
           </form>
         </Modal.Footer>
       </Modal>
-
       {/* MODAL PARA ELIMINAR */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
         <Modal.Header closeButton>
