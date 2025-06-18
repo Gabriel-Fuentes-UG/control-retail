@@ -1,0 +1,29 @@
+/* src/components/dashboard/KPICard.css */
+
+.kpi-card {
+  border: 1px solid #e0e6ea;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.kpi-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  background-color: #f8f9fa;
+}
+
+.kpi-value {
+  font-size: 2.8em;
+  font-weight: 700;
+  color: #2e86de; /* --primary-color */
+  margin-bottom: 4px;
+}
+
+.kpi-label {
+  font-size: 1em;
+  color: #34495e; /* --text-dark */
+  font-weight: 500;
+  opacity: 0.9;
+}

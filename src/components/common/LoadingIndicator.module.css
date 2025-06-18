@@ -1,0 +1,40 @@
+/* src/components/common/LoadingIndicator.module.css */
+
+.loaderContainer {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f4f2ee;
+}
+  
+.loadingBar {
+    width: 130px;
+    height: 5px;
+    border-radius: 2px;
+    background-color: #fff;
+    position: relative;
+    overflow: hidden;
+}
+  
+.blueBar {
+    height: 100%;
+    width: 68px;
+    position: absolute;
+    background-color: #0a66c2;
+    border-radius: 2px;
+    animation: initial-loading 1.5s ease-in-out infinite;
+}
+  
+@keyframes initial-loading {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(130px);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+}

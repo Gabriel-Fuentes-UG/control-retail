@@ -1,8 +1,27 @@
+/* src/app/globals.css */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --primary-color: #2e86de; /* Blue */
+    --secondary-color: #4CAF50; /* Green for admin accents */
+    --bg-light: #ecf0f1;
+    --bg-dark: #2c3e50;
+    --text-dark: #34495e;
+    --text-light: #ecf0f1;
+    --card-bg: #ffffff;
+    --border-light: #e0e6ea;
+    --shadow-light: rgba(0, 0, 0, 0.08);
+    --shadow-strong: rgba(0, 0, 0, 0.15);
 }
 
+body {
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-dark);
+    background-color: var(--bg-light);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Vamos a necesitar un import de la fuente en nuestro layout */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -16,13 +35,6 @@ body {
   overflow-x: hidden;
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
 
 * {
   box-sizing: border-box;
@@ -39,4 +51,29 @@ a {
   html {
     color-scheme: dark;
   }
+}
+
+
+/* En src/app/globals.css */
+
+.dashboard-section {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    margin-bottom: 30px;
+}
+
+/* TEMAS DE COLOR POR ROL */
+.role-theme-admin {
+    --role-accent-color: #4CAF50; /* Verde para Admin */
+}
+.role-theme-supervisor {
+    --role-accent-color: #f39c12; /* Naranja para Supervisor */
+}
+.role-theme-gerente {
+    --role-accent-color: #9b59b6; /* Morado para Gerente */
+}
+.role-theme-colaborador {
+    --role-accent-color: #3498db; /* Azul claro para Colaborador */
 }

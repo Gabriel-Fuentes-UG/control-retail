@@ -1,0 +1,191 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// =======================================
+// Modelos de Estructura, Usuarios y Permisos
+// =======================================
+
+model User {
+  id               String             @id @default(cuid())
+  name             String
+  email            String             @unique
+  password         String
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  
+  roleId           String
+  role             Role               @relation(fields: [roleId], references: [id])
+
+  // Para Gerente, Encargado, Vendedor (relación uno-a-uno)
+  storeId          String?
+  store            Store?             @relation("StoreUsers", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Para Supervisores (relación muchos-a-muchos)
+  supervisedStores SupervisorStores[] @relation("SupervisorRelation")
+
+  // Relaciones con otros modelos
+  auditLogs        AuditLog[]
+  confirmedMovements Movement[] @relation("ConfirmedByUserRelation")
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  homeRoute   String
+
+  users       User[]
+  permissions Permission[] @relation("RolePermissions")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  action      String   @unique
+  description String?
+  
+  roles       Role[] @relation("RolePermissions")
+}
+
+model Store {
+  id                String             @id
+  name              String
+  isActive          Boolean            @default(true)
+
+  users             User[]             @relation("StoreUsers")
+  supervisedBy      SupervisorStores[] @relation("StoreRelation")
+  inventory         Inventory[]
+  movementsOrigin   Movement[]         @relation("OriginStoreMovements")
+  movementsDestiny  Movement[]         @relation("DestinyStoreMovements")
+}
+
+// Tabla intermedia para la relación muchos-a-muchos entre Supervisor y Tienda
+model SupervisorStores {
+  userId  String
+  storeId String
+  user    User   @relation("SupervisorRelation", fields: [userId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  store   Store  @relation("StoreRelation", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+
+  @@id([userId, storeId])
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+}
+
+
+// =======================================
+// Modelos de Producto e Inventario
+// =======================================
+
+model Product {
+  id            String         @id @default(cuid())
+  sku           String         @unique
+  name          String
+  description   String?
+  cost          Float          @default(0)
+  price         Float          @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  inventory     Inventory[]
+  movementItems MovementItem[]
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  stock     Int      @default(0)
+  inTransit Int      @default(0)
+  updatedAt DateTime @updatedAt
+  
+  @@unique([storeId, productId])
+}
+
+// =======================================
+// Modelos de Movimientos (Entradas/Salidas)
+// =======================================
+
+model MovementType {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  movements   Movement[]
+}
+
+model MovementStatus {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  movements   Movement[]
+}
+
+model Movement {
+  id                 String         @id @default(cuid())
+  documentNumber     String?
+  observations       String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  
+  typeId             String
+  type               MovementType   @relation(fields: [typeId], references: [id])
+  statusId           String
+  status             MovementStatus @relation(fields: [statusId], references: [id])
+  
+  originStoreId      String?
+  originStore        Store?         @relation("OriginStoreMovements", fields: [originStoreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  destinationStoreId String?
+  destinationStore   Store?         @relation("DestinyStoreMovements", fields: [destinationStoreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  confirmedByUserId  String?
+  confirmedByUser    User?          @relation("ConfirmedByUserRelation", fields: [confirmedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  items              MovementItem[]
+  boxes              Box[]
+}
+
+model MovementItem {
+  id               String   @id @default(cuid())
+  movementId       String
+  movement         Movement @relation(fields: [movementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  productId        String
+  product          Product  @relation(fields: [productId], references: [id])
+  quantityExpected Int
+  quantityReceived Int?
+  boxId            String?
+  box              Box?     @relation(fields: [boxId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Box {
+  id         String         @id @default(cuid())
+  movementId String
+  movement   Movement       @relation(fields: [movementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  boxNumber  Int
+  isClosed   Boolean        @default(false)
+  items      MovementItem[]
+}
+
+// =======================================
+// Modelo de Auditoría
+// =======================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  action    String
+  details   String?
+}

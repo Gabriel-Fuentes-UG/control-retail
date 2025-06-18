@@ -1,0 +1,89 @@
+/* src/app/admin/layout.module.css */
+
+.sidebar {
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    padding: 30px 20px;
+    box-shadow: 3px 0 15px var(--shadow-strong);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.sidebarHeader {
+    text-align: center;
+    margin-bottom: 40px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebarHeader h2 {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--secondary-color);
+    letter-spacing: 1px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+      color: var(--role-accent-color);
+}
+
+.mainContent {
+    padding: 30px;
+    overflow-y: auto;
+}
+
+.pageHeader {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 1rem; /* Un poco de padding como en el original */
+    border-bottom: 1px solid var(--border-light);
+    background-color: var(--card-bg);
+    margin: -30px -30px 30px -30px; /* Ajuste para que ocupe todo el ancho */
+    padding-right: 30px;
+}
+
+/* Al final de src/app/admin/layout.module.css */
+
+.sidebar {
+    width: 280px;
+    transition: width 0.3s ease-in-out;
+    /* ... otros estilos que ya tenías ... */
+}
+
+.sidebar.collapsed {
+    width: 80px; /* Ancho cuando está colapsado */
+}
+
+.sidebar.collapsed .sidebarHeader h2 {
+    font-size: 28px; /* Hacemos la 'S' un poco más pequeña */
+}
+
+/* Al final de src/app/admin/layout.module.css */
+
+.sidebar {
+    width: 280px;
+    transition: width 0.3s ease-in-out;
+    /* ... otros estilos que ya tenías ... */
+}
+
+/* Estilos cuando la barra está colapsada */
+.sidebar.collapsed {
+    width: 80px;
+}
+
+.sidebar.collapsed .sidebarHeader h2 {
+    font-size: 28px;
+}
+
+/* Ocultar la barra en pantallas pequeñas */
+@media (max-width: 992px) {
+    .sidebar {
+        position: absolute;
+        left: -280px; /* La ocultamos fuera de la pantalla */
+        z-index: 1000;
+    }
+    .sidebar:not(.collapsed) {
+        /* Aquí podríamos añadir lógica para mostrarla como un overlay */
+    }
+}
