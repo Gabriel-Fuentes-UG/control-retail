@@ -59,7 +59,7 @@ export const columns: ColumnDef<UserWithRelations>[] = [
         return user.role.name !== 'ADMINISTRADOR' ? (
           <UserActionButtons user={user} />
         ) : (
-          <Link href={`/management/users/edit/${user.id}`}>
+          <Link href={`/management/users/edit/${user.id}`} legacyBehavior>
             <Button variant="secondary" size="sm">Editar</Button>
           </Link>
         );
