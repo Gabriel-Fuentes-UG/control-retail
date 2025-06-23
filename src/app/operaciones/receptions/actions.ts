@@ -7,7 +7,8 @@ import { getServerSession } from "next-auth";
 import { Store } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
-// Tipos para la respuesta de las APIs
+// --- TIPOS ---
+
 export type IncomingTransfer = {
     FolioSAP: number;
     Fecha: string;
@@ -16,11 +17,20 @@ export type IncomingTransfer = {
 };
 
 export type TransferDetail = {
+    Linenum: number; // Campo añadido, ya que se usa en el cliente
     Articulo: string;
     Descripcion: string;
     Cantidad: number;
     CodeBars: string;
 };
+
+// --- ESTADO PARA LA ACCIÓN ---
+export type ReceptionState = {
+    success: boolean;
+    error?: string;
+    message?: string;
+} | null;
+
 
 // Acción para obtener la lista de traslados pendientes
 export async function getIncomingTransfersAction(): Promise<IncomingTransfer[]> {
@@ -119,17 +129,87 @@ export async function getSupervisorManagedStoresAction(): Promise<Store[]> {
 }
 
 // Acción para confirmar la recepción y guardarla en nuestra base de datos
-export async function confirmReceptionAction(prevState: any, formData: FormData) {
-    "use server";
+// ***** CORREGIDO *****
+export async function confirmReceptionAction(previousState: ReceptionState, formData: FormData): Promise<ReceptionState> {
+    try {
+        const folioSAP = String(formData.get("folioSAP"));
+        if (!folioSAP) {
+             return { success: false, error: "Falta el folio SAP." };
+        }
 
-    const folioSAP = formData.get('folioSAP');
-    
-    console.log("Recepción confirmada para el folio:", folioSAP);
-    console.log("Datos recibidos:", Object.fromEntries(formData.entries()));
+        const items: Array<{
+            linenum: number;
+            articulo: string;
+            esperado: number;
+            recibido: number;
+        }> = [];
 
-    // TODO: Aquí irá la lógica para guardar en la base de datos que construiremos en el siguiente paso.
-    
-    revalidatePath("/operaciones/receptions");
-    return { success: true, message: `Recepción para el folio ${folioSAP} procesada (simulación).` };
+        // 1) Reconstruimos los items desde el FormData
+        const itemData: { [key: number]: Partial<(typeof items)[0]> } = {};
+        for (const [key, value] of formData.entries()) {
+            const match = key.match(/^items\[(\d+)\]\[(articulo|esperado|recibido)\]$/);
+            if (!match) continue;
+
+            const linenum = Number(match[1]);
+            const field = match[2] as 'articulo' | 'esperado' | 'recibido';
+
+            if (!itemData[linenum]) {
+                itemData[linenum] = { linenum };
+            }
+
+            if (field === 'articulo') {
+                itemData[linenum][field] = String(value);
+            } else {
+                itemData[linenum][field] = Number(value);
+            }
+        }
+        
+        const processedItems = Object.values(itemData).map(item => ({
+            linenum: item.linenum!,
+            articulo: item.articulo!,
+            esperado: item.esperado!,
+            recibido: item.recibido!,
+            diferencia: item.recibido! - item.esperado!,
+            motivo: null, // Puedes añadir lógica para estos campos si los necesitas
+            observaciones: null,
+            createdAt: new Date(),
+            folioSAP,
+        }));
+
+        if (processedItems.length === 0) {
+            return { success: false, error: "No se enviaron artículos para procesar." };
+        }
+
+        // 2) Guardamos en la base de datos dentro de una transacción
+        await prisma.$transaction(async (tx) => {
+            // Borramos logs previos para este folio para evitar duplicados
+            await tx.receptionLog.deleteMany({ where: { folioSAP } });
+
+            // Creamos los nuevos registros
+            await tx.receptionLog.createMany({
+                data: processedItems.map(i => ({
+                    folioSAP: i.folioSAP,
+                    linenum: i.linenum,
+                    articulo: i.articulo,
+                    cantidadEsperada: i.esperado,
+                    cantidadRecibida: i.recibido,
+                    diferencia: i.diferencia,
+                    motivo: i.motivo,
+                    observaciones: i.observaciones,
+                    createdAt: i.createdAt
+                }))
+            });
+        });
+        
+        // 3) Revalidamos la ruta para que futuras cargas reflejen los cambios
+        revalidatePath('/operaciones/receptions');
+
+        // 4) Devolvemos un estado de éxito
+        return { success: true, message: "Recepción confirmada exitosamente." };
+
+    } catch (error) {
+        console.error("Error al confirmar la recepción:", error);
+        const errorMessage = error instanceof Error ? error.message : "Ocurrió un error desconocido.";
+        return { success: false, error: `Error en el servidor: ${errorMessage}` };
+    }
 }
-// --- FIN DE LA FUNCIÓN FALTANTE ---
