@@ -1,102 +1,78 @@
-// src/app/management/users/page.tsx
+"use client";
 
-import { prisma } from "@/lib/prisma";
-import { Button } from "react-bootstrap";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Button, Form, Row, Col } from "react-bootstrap";
 import Link from "next/link";
 import Breadcrumbs from "@/components/layout/Breadcrumbs";
 import DataTable from "@/components/common/DataTable";
 import { columns } from "./columns";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { redirect } from "next/navigation";
-import { User } from "@prisma/client";
+import { UserWithRelations } from "@/lib/types";
+import { getManagedUsersForClient } from "./actions";
+import { useSession } from "next-auth/react";
+import LoadingIndicator from "@/components/common/LoadingIndicator";
+import { Store } from "@prisma/client";
 
-// Tipos extendidos para incluir relaciones
-type UserWithRelations = User & {
-  role: { name: string };
-  store: { name: string } | null;
-  supervisedStores: { store: { name: string } }[];
-};
+export default function UsersPage() {
+  const { data: session } = useSession();
+  const [users, setUsers] = useState<UserWithRelations[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [storeFilter, setStoreFilter] = useState<string>('all');
 
-// --- Función de Servidor para obtener solo los usuarios gestionables ---
-async function getManagedUsers(): Promise<UserWithRelations[]> {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    // Esto es una salvaguarda, el middleware debería actuar primero
-    return redirect('/');
-  }
+  const fetchUsers = useCallback(async () => {
+    // No ponemos setIsLoading aquí para que el refresco sea más sutil
+    const fetchedUsers = await getManagedUsersForClient();
+    setUsers(fetchedUsers);
+    setIsLoading(false);
+  }, []);
 
-  const currentUser = session.user;
-  let managedUsers: UserWithRelations[] = [];
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
-  switch (currentUser.role) {
-    case 'ADMINISTRADOR':
-      // El Admin ve a todos los usuarios excepto a sí mismo
-      managedUsers = await prisma.user.findMany({
-        where: { id: { not: currentUser.id } },
-        include: { role: true, store: true, supervisedStores: { include: { store: true } } },
-        orderBy: { name: 'asc' }
-      });
-      break;
+  const filteredUsers = useMemo(() => {
+    if (storeFilter === "all") return users;
+    return users.filter(user => {
+        if (user.role.name === 'SUPERVISOR') {
+            return user.supervisedStores.some(ss => ss.storeId === storeFilter);
+        }
+        return user.storeId === storeFilter;
+    });
+  }, [users, storeFilter]);
 
-    case 'SUPERVISOR':
-      // El Supervisor ve a los usuarios de sus tiendas asignadas y con rol inferior
-      const supervisedStores = await prisma.supervisorStores.findMany({
-        where: { userId: currentUser.id },
-        select: { storeId: true }
-      });
-      const storeIds = supervisedStores.map(s => s.storeId);
-      
-      if (storeIds.length > 0) {
-        managedUsers = await prisma.user.findMany({
-          where: {
-            storeId: { in: storeIds },
-            role: { name: { in: ['GERENTE', 'ENCARGADO', 'VENDEDOR'] } }
-          },
-          include: { role: true, store: true, supervisedStores: { include: { store: true } } },
-          orderBy: { name: 'asc' }
-        });
-      }
-      break;
+  const availableStores = useMemo(() => {
+    if (!session?.user?.role || (session.user.role !== 'SUPERVISOR' && session.user.role !== 'ADMINISTRADOR')) return [];
+    const allStores = users.flatMap(u => u.store ? [u.store] : (u.supervisedStores?.map(ss => ss.store) || [])).filter((s): s is Store => !!s);
+    return Array.from(new Map(allStores.map((s) => [s.id, s])).values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, session]);
 
-    case 'GERENTE':
-      // El Gerente ve a los usuarios de su propia tienda y con rol inferior
-      const managerWithStore = await prisma.user.findUnique({ where: { id: currentUser.id }});
-      if (!managerWithStore?.storeId) return [];
+  if (isLoading) return <LoadingIndicator />;
 
-      managedUsers = await prisma.user.findMany({
-        where: {
-          storeId: managerWithStore.storeId,
-          id: { not: currentUser.id },
-          role: { name: { in: ['ENCARGADO', 'VENDEDOR'] } }
-        },
-        include: { role: true, store: true, supervisedStores: { include: { store: true } } },
-        orderBy: { name: 'asc' }
-      });
-      break;
-  }
-  
-  return managedUsers;
-}
-
-export default async function UsersPage() {
-  const users = await getManagedUsers();
-  
-  const breadcrumbItems = [
-    { label: "Inicio", href: "/redirect-hub" }, 
-    { label: "Gestionar Personal" }
-  ];
+  const breadcrumbItems = [{ label: "Inicio", href: "/redirect-hub" }, { label: "Gestionar Personal" }];
 
   return (
     <div className="dashboard-section">
       <Breadcrumbs items={breadcrumbItems} />
       <div className="d-flex justify-content-between align-items-center my-4">
         <h2>Gestionar Personal</h2>
-        <Link href="/management/users/new">
-          <Button variant="primary">Crear Subordinado</Button>
-        </Link>
+        <Link href="/management/users/new"><Button variant="primary">Agregar Usuario</Button></Link>
       </div>
-      <DataTable columns={columns} data={users} />
+
+      {(session?.user?.role === "SUPERVISOR" || session?.user?.role === "ADMINISTRADOR") && availableStores.length > 0 && (
+        <Row className="mb-4">
+          <Col md={4}>
+            <Form.Group controlId="storeFilter">
+              <Form.Label>Filtrar por Tienda</Form.Label>
+              <Form.Select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
+                <option value="all">Todas las tiendas</option>
+                {availableStores.map((store) => (<option key={store.id} value={store.id}>{store.name}</option>))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+        </Row>
+      )}
+
+      {/* Le pasamos la función de refresco a la DataTable a través de 'meta' */}
+      <DataTable columns={columns} data={filteredUsers} meta={{ refetchData: fetchUsers }} />
     </div>
   );
 }

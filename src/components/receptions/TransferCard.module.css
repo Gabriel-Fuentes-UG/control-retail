@@ -1,0 +1,43 @@
+/* src/components/receptions/TransferCard.module.css */
+
+.card {
+    background-color: #ffffff;
+    border: 1px solid #e0e6ea;
+    border-radius: 12px;
+    padding: 20px;
+    height: 100%;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.card:hover {
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+.header {
+    margin-bottom: 1rem;
+}
+
+.folio {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color, #2e86de);
+}
+
+.origin {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6c757d; /* text-muted */
+}
+
+.footer {
+    border-top: 1px solid #e9ecef;
+    padding-top: 0.75rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+}

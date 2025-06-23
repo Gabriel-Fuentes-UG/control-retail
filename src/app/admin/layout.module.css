@@ -86,3 +86,4 @@
         /* Aquí podríamos añadir lógica para mostrarla como un overlay */
     }
 }
+.fadeIn { animation: fadeInAnimation 0.5s ease-in-out; } @keyframes fadeInAnimation { from { opacity: 0; } to { opacity: 1; } }

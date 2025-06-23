@@ -1,54 +1,43 @@
-// src/app/admin/users/edit/[id]/page.tsx
+// src/app/management/users/[id]/page.tsx
+import { prisma } from "@/lib/prisma"
+import UserForm from "../new/UserForm"        // reutilizamos el mismo form
+import { updateUserAction } from "../actions" // tu Server Action de actualización
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { redirect } from "next/navigation"
 
-import { getSyncedStores } from "@/lib/data/stores";
-import { prisma } from "@/lib/prisma";
-import UserForm from "@/app/management/users/new/UserForm";
-import Breadcrumbs from "@/components/layout/Breadcrumbs";
-import { notFound } from "next/navigation";
-import { updateUserAction } from "../actions";
+export default async function EditUserPage({ params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) redirect("/")
 
-// La firma del componente indica que `params` es una Promesa
-export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
-  
-  // ==================================================================
-  // ESTA ES LA LÍNEA CLAVE DE LA SOLUCIÓN OFICIAL Y DEFINITIVA
-  // "Esperamos" (await) a que los parámetros se resuelvan antes de usarlos.
-  const { id } = await params;
-  // ==================================================================
+  // 1) Traemos el registro de usuario completo
+  const userRecord = await prisma.user.findUnique({
+    where: { id: params.id },
+    include: { role: true, store: true },
+  })
+  if (!userRecord) redirect("/management/users")
 
-  // El resto del código ahora puede usar 'id' de forma segura.
-  const [user, stores, roles] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id },
-      include: {
-        role: true,
-        supervisedStores: true,
-      },
-    }),
-    getSyncedStores(),
-    prisma.role.findMany({ where: { name: { not: 'ADMINISTRADOR' } } })
-  ]);
-  
-  if (!user) {
-    notFound();
-  }
-  
-  const breadcrumbItems = [
-    { label: "Inicio Admin", href: "/admin/home" },
-    { label: "Usuarios", href: "/admin/users" },
-    { label: `Editar ${user.name}` },
-  ];
+  // 2) Roles y tiendas (según tu lógica de permisos)
+  const allRoles  = await prisma.role.findMany({ orderBy: { name: "asc" } })
+  const allStores = await prisma.store.findMany({ orderBy: { name: "asc" } })
 
   return (
     <div className="dashboard-section">
-      <Breadcrumbs items={breadcrumbItems} />
-      <h2 className="my-4">Editar Usuario: {user.name}</h2>
-      <UserForm 
-        stores={stores} 
-        roles={roles} 
-        formAction={updateUserAction} 
-        user={user}
+      <h2 className="my-4">Editar Usuario: {userRecord.name}</h2>
+      <UserForm
+        roles={allRoles}
+        stores={allStores}
+        // 3) Pasamos el usuario para editar
+        user={{
+          id:       userRecord.id,
+          name:     userRecord.name,
+          email:    userRecord.email,
+          roleId:   userRecord.roleId,
+          storeId:  userRecord.storeId || "",
+          isActive: userRecord.isActive,
+        }}
+        formAction={updateUserAction}
       />
     </div>
-  );
+  )
 }

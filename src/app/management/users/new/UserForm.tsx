@@ -1,100 +1,154 @@
-// src/app/admin/users/new/UserForm.tsx
-"use client";
+// src/app/management/users/new/UserForm.tsx
+'use client'
 
-import { useState, useEffect } from "react";
-import { useActionState } from "react";
-import { Role, User as PrismaUser, SupervisorStores } from "@prisma/client";
-import { StoreType } from "@/lib/data/stores";
-import { Form, Button, Row, Col } from "react-bootstrap";
+import React, { useState, useEffect } from "react"
+import { Form, Button, Row, Col } from "react-bootstrap"
+import { CreateUserData, UpdateUserData } from "../actions"
 
-type UserWithRelations = PrismaUser & {
-  role: Role;
-  supervisedStores?: SupervisorStores[];
-};
+interface Role  { id: string; name: string }
+interface Store { id: string; name: string; isActive: boolean }
 
-type FormAction = (prevState: any, formData: FormData) => Promise<{ message: string; } | undefined>;
+// Definimos un tipo unificado para New vs Edit
+interface UserFormProps {
+  roles: Role[]
+  stores: Store[]
+  // Si viene `user`, es edición; si no, es creación
+  user?: {
+    id: string
+    name: string
+    email: string
+    roleId: string
+    storeId: string
+    isActive: boolean
+  }
+  // Según sea new/edit, apuntamos a la action correspondiente
+  formAction: (formData: FormData) => Promise<any>
+}
 
-type UserFormProps = {
-  stores: StoreType[];
-  roles: Role[];
-  formAction: FormAction;
-  user?: UserWithRelations | null;
-};
+export default function UserForm({ roles, stores, user, formAction }: UserFormProps) {
+  const [name,    setName]    = useState("")
+  const [email,   setEmail]   = useState("")
+  const [password,setPassword]= useState("")
+  const [roleId,  setRoleId]  = useState("")
+  const [storeId, setStoreId] = useState("")
+  const [isActive,setIsActive]= useState(true)
 
-export default function UserForm({ stores, roles, formAction, user }: UserFormProps) {
-  const [state, action] = useActionState(formAction, undefined);
-  const [selectedRoleId, setSelectedRoleId] = useState(user?.roleId || '');
-  
+  // Al montar (o cuando cambie `user`), poblamos los estados
   useEffect(() => {
-    if (user?.roleId) { setSelectedRoleId(user.roleId); }
-  }, [user]);
-
-  const selectedRoleName = roles.find(r => r.id === selectedRoleId)?.name;
-  const supervisedStoreIds = new Set(user?.supervisedStores?.map(s => s.storeId) || []);
+    if (user) {
+      setName(user.name)
+      setEmail(user.email)
+      setRoleId(user.roleId)
+      setStoreId(user.storeId)
+      setIsActive(user.isActive)
+      // dejamos password en blanco para no forzar cambio
+      setPassword("")
+    }
+  }, [user])
 
   return (
-    <Form action={action} className="mt-4">
-      {user && <input type="hidden" name="id" value={user.id} />}
-
-      <Row>
+   <Form action={formAction}>
+    {/* ← Campo oculto para el id (sólo en edición) */}
+    {user && (
+      <input type="hidden" name="id" value={user.id} />
+    )}
+      <Row className="mb-3">
         <Col md={6}>
-          <Form.Group className="mb-3" controlId="name"><Form.Label>Nombre Completo</Form.Label><Form.Control type="text" name="name" required defaultValue={user?.name} /></Form.Group>
-        </Col>
-        <Col md={6}>
-          <Form.Group className="mb-3" controlId="email"><Form.Label>Correo Electrónico</Form.Label><Form.Control type="email" name="email" required defaultValue={user?.email} /></Form.Group>
-        </Col>
-      </Row>
-      <Row>
-        <Col md={6}>
-          <Form.Group className="mb-3" controlId="password">
-            <Form.Label>Contraseña</Form.Label>
-            <Form.Control 
-              type="password" 
-              name="password" 
-              placeholder={user ? "Dejar en blanco para no cambiar" : "Contraseña"}
-              required={!user}
+          <Form.Group controlId="name">
+            <Form.Label>Nombre Completo</Form.Label>
+            <Form.Control
+              name="fullName"
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
             />
           </Form.Group>
         </Col>
         <Col md={6}>
-          <Form.Group className="mb-3" controlId="roleId">
+          <Form.Group controlId="email">
+            <Form.Label>Correo Electrónico</Form.Label>
+            <Form.Control
+              name="email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+
+      {/* Contraseña solo en edición es opcional */}
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group controlId="password">
+            <Form.Label>
+              Contraseña
+              {user ? " (dejar en blanco para no cambiar)" : ""}
+            </Form.Label>
+            <Form.Control
+              name="password"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="********"
+              // required solo si NO es edición
+              {...(user ? {} : { required: true })}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group controlId="roleId">
             <Form.Label>Rol</Form.Label>
-            <Form.Select name="roleId" required value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)}>
-              <option value="">Selecciona un rol...</option>
-              {roles.map((role) => ( <option key={role.id} value={role.id}>{role.name}</option> ))}
+            <Form.Select
+              name="roleId"
+              value={roleId}
+              onChange={e => setRoleId(e.target.value)}
+              required
+            >
+              <option value="">Selecciona un rol…</option>
+              {roles.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
             </Form.Select>
           </Form.Group>
         </Col>
       </Row>
 
-      {selectedRoleName === 'SUPERVISOR' ? (
-        <Form.Group className="mb-3" controlId="stores">
-          <Form.Label>Tiendas a Supervisar (Selecciona al menos una)</Form.Label>
-          <div className="p-3 border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {stores.map(store => (
-              <Form.Check key={store.id} type="checkbox" id={`store-${store.id}`} name="storeIds" value={store.id} label={store.name} defaultChecked={supervisedStoreIds.has(store.id)} />
-            ))}
-          </div>
-        </Form.Group>
-      ) : selectedRoleName ? (
-        <Form.Group className="mb-3" controlId="storeId">
-          <Form.Label>Tienda Asignada (Obligatorio)</Form.Label>
-          <Form.Select name="storeId" required defaultValue={user?.storeId || ''}>
-            <option value="">Selecciona una tienda...</option>
-            {stores.map((store) => ( <option key={store.id} value={store.id}>{store.name}</option> ))}
-          </Form.Select>
-        </Form.Group>
-      ) : null}
-      
-      <Form.Check className="my-3" type="switch" id="isActive" name="isActive" label="Usuario Activo" defaultChecked={user?.isActive ?? true} />
-      
-      {state?.message && <p className="text-danger">{state.message}</p>}
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group controlId="storeId">
+            <Form.Label>Tienda Asignada</Form.Label>
+            <Form.Select
+              name="storeId"
+              value={storeId}
+              onChange={e => setStoreId(e.target.value)}
+              required
+            >
+              <option value="">Selecciona una tienda…</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Col>
+        <Col md={6} className="d-flex align-items-center">
+          <Form.Group controlId="isActive" className="w-100">
+            <Form.Check
+              type="switch"
+              name="isActive"
+              label="Usuario Activo"
+              checked={isActive}
+              onChange={e => setIsActive(e.target.checked)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
 
-      <div className="mt-4">
-        <Button variant="primary" type="submit">
-          {user ? 'Guardar Cambios' : 'Guardar Usuario'}
-        </Button>
-      </div>
+      <Button variant="primary" type="submit">
+        {user ? "Guardar Cambios" : "Crear Usuario"}
+      </Button>
     </Form>
-  );
+  )
 }

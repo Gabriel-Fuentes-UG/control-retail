@@ -12,29 +12,22 @@ datasource db {
 // =======================================
 // Modelos de Estructura, Usuarios y Permisos
 // =======================================
-
 model User {
-  id               String             @id @default(cuid())
-  name             String
-  email            String             @unique
-  password         String
-  isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  name               String
+  email              String             @unique
+  password           String
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   
-  roleId           String
-  role             Role               @relation(fields: [roleId], references: [id])
-
-  // Para Gerente, Encargado, Vendedor (relación uno-a-uno)
-  storeId          String?
-  store            Store?             @relation("StoreUsers", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  // Para Supervisores (relación muchos-a-muchos)
-  supervisedStores SupervisorStores[] @relation("SupervisorRelation")
-
-  // Relaciones con otros modelos
-  auditLogs        AuditLog[]
-  confirmedMovements Movement[] @relation("ConfirmedByUserRelation")
+  roleId             String
+  role               Role               @relation(fields: [roleId], references: [id])
+  storeId            String?
+  store              Store?             @relation("StoreUsers", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supervisedStores   SupervisorStores[] @relation("SupervisorRelation")
+  auditLogs          AuditLog[]
+  confirmedMovements Movement[]         @relation("ConfirmedByUserRelation")
 }
 
 model Role {
@@ -42,7 +35,6 @@ model Role {
   name        String       @unique
   description String?
   homeRoute   String
-
   users       User[]
   permissions Permission[] @relation("RolePermissions")
 }
@@ -51,29 +43,25 @@ model Permission {
   id          String   @id @default(cuid())
   action      String   @unique
   description String?
-  
-  roles       Role[] @relation("RolePermissions")
+  roles       Role[]   @relation("RolePermissions")
 }
 
 model Store {
-  id                String             @id
-  name              String
-  isActive          Boolean            @default(true)
-
-  users             User[]             @relation("StoreUsers")
-  supervisedBy      SupervisorStores[] @relation("StoreRelation")
-  inventory         Inventory[]
-  movementsOrigin   Movement[]         @relation("OriginStoreMovements")
-  movementsDestiny  Movement[]         @relation("DestinyStoreMovements")
+  id                 String             @id
+  name               String
+  isActive           Boolean            @default(true)
+  users              User[]             @relation("StoreUsers")
+  supervisedBy       SupervisorStores[] @relation("StoreRelation")
+  inventory          Inventory[]
+  movementsOrigin    Movement[]         @relation("OriginStoreMovements")
+  movementsDestiny   Movement[]         @relation("DestinyStoreMovements")
 }
 
-// Tabla intermedia para la relación muchos-a-muchos entre Supervisor y Tienda
 model SupervisorStores {
   userId  String
   storeId String
   user    User   @relation("SupervisorRelation", fields: [userId], references: [id], onDelete: NoAction, onUpdate: Cascade)
   store   Store  @relation("StoreRelation", fields: [storeId], references: [id], onDelete: NoAction, onUpdate: Cascade)
-
   @@id([userId, storeId])
 }
 
@@ -82,11 +70,9 @@ model SystemConfig {
   value String
 }
 
-
 // =======================================
 // Modelos de Producto e Inventario
 // =======================================
-
 model Product {
   id            String         @id @default(cuid())
   sku           String         @unique
@@ -96,9 +82,9 @@ model Product {
   price         Float          @default(0)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  
   inventory     Inventory[]
   movementItems MovementItem[]
+  inventoryLosses InventoryLoss[]
 }
 
 model Inventory {
@@ -110,14 +96,12 @@ model Inventory {
   stock     Int      @default(0)
   inTransit Int      @default(0)
   updatedAt DateTime @updatedAt
-  
   @@unique([storeId, productId])
 }
 
 // =======================================
 // Modelos de Movimientos (Entradas/Salidas)
 // =======================================
-
 model MovementType {
   id          String     @id @default(cuid())
   name        String     @unique
@@ -132,12 +116,13 @@ model MovementStatus {
   movements   Movement[]
 }
 
+// --- MODELO MOVEMENT MODIFICADO ---
 model Movement {
-  id                 String         @id @default(cuid())
+  id                 String    @id @default(cuid())
   documentNumber     String?
   observations       String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   
   typeId             String
   type               MovementType   @relation(fields: [typeId], references: [id])
@@ -154,38 +139,80 @@ model Movement {
   
   items              MovementItem[]
   boxes              Box[]
+
+  // Vínculo para la trazabilidad de traslados desviados
+  parentMovementId   String?          @unique
+  parentMovement     Movement?        @relation("SubMovements", fields: [parentMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subMovements       Movement[]       @relation("SubMovements")
+
+  // Relaciones con los nuevos modelos
+  incidents          TransferIncident[]
+  inventoryLosses    InventoryLoss[]
 }
 
 model MovementItem {
   id               String   @id @default(cuid())
   movementId       String
-  movement         Movement @relation(fields: [movementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement         Movement @relation(fields: [movementId], references: [id], onDelete: Cascade) // Si se borra el movimiento, se borra el detalle
   productId        String
   product          Product  @relation(fields: [productId], references: [id])
   quantityExpected Int
   quantityReceived Int?
   boxId            String?
-  box              Box?     @relation(fields: [boxId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  box              Box?     @relation(fields: [boxId], references: [id], onDelete: SetNull) // Si se borra la caja, el item no se borra
 }
 
 model Box {
   id         String         @id @default(cuid())
   movementId String
-  movement   Movement       @relation(fields: [movementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movement   Movement       @relation(fields: [movementId], references: [id], onDelete: Cascade) // Si se borra el movimiento, se borran sus cajas
   boxNumber  Int
   isClosed   Boolean        @default(false)
   items      MovementItem[]
 }
 
+// --- NUEVO MODELO DE INCIDENCIAS ---
+model TransferIncident {
+  id              String    @id @default(cuid())
+  movementId      String
+  movement        Movement  @relation(fields: [movementId], references: [id])
+  
+  detectedByUserId  String
+  detectedStoreId   String
+  detectedAt      DateTime  @default(now())
+  
+  incidentType    String    // 'DEVIATION' o 'THEFT'
+  notes           String?
+  
+  resolvedByUserId  String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+}
+
+// --- NUEVO MODELO DE PÉRDIDAS ---
+model InventoryLoss {
+  id             String    @id @default(cuid())
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id])
+  quantity       Int
+  
+  reason         String    // 'THEFT', 'DAMAGED', 'ADJUSTMENT'
+  recordedByUserId String
+  occurredAt     DateTime  @default(now())
+  
+  storeId        String?
+  movementId     String?
+  movement       Movement? @relation(fields: [movementId], references: [id])
+}
+
 // =======================================
 // Modelo de Auditoría
 // =======================================
-
 model AuditLog {
   id        String   @id @default(cuid())
   timestamp DateTime @default(now())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user      User     @relation(fields: [userId], references: [id])
   action    String
   details   String?
 }
