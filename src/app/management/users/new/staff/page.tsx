@@ -1,42 +1,59 @@
-// src/app/management/users/new/staff/page.tsx
 import { prisma } from "@/lib/prisma";
-import UserForm from "../UserForm";
-import Breadcrumbs from "@/components/layout/Breadcrumbs";
-import { createUserAction } from "../../actions";
-import { getEditPageData } from "../../actions"; // Reutilizamos esta acción para obtener tiendas y roles disponibles.
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";
+import Breadcrumbs from "@/components/layout/Breadcrumbs";
+import StaffForm from "../../forms/StaffForm";
+import { createUserAction } from "./../../actions";
+import { getSyncedStores } from "@/lib/data/stores";
 
 export default async function NewStaffPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/");
+  if (!session) redirect('/');
 
-  // Usamos getEditPageData (aunque no estemos editando) para obtener
-  // las listas de tiendas y roles que el usuario actual puede gestionar.
-  // Pasamos el ID del propio usuario para obtener su contexto.
-  const { availableStores, availableRoles } = await getEditPageData(session.user.id);
-  
-  // Excluimos el rol de Supervisor de la lista para este formulario.
-  const staffRoles = availableRoles.filter(role => role.name !== 'SUPERVISOR');
+  // 1) Registro del usuario actual
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id! },
+    include: { role: true, store: true, supervisedStores: { include: { store: true } } }
+  });
+  if (!me) redirect('/');
 
+  let availableStores = [] as { id: string; name: string }[];
+  let availableRoles = [];
+
+  switch (me.role.name) {
+    case 'ADMINISTRADOR':
+      availableStores = await getSyncedStores();
+      break;
+    case 'SUPERVISOR':
+      availableStores = me.supervisedStores.map(s => ({ id: s.store.id, name: s.store.name }));
+      break;
+    case 'GERENTE':
+      if (me.store) availableStores = [{ id: me.store.id, name: me.store.name }];
+      break;
+  }
+
+  // 2) Roles estáticos (Staff siempre ve GERENTE, ENCARGADO, VENDEDOR)
+  availableRoles = await prisma.role.findMany({
+    where: { name: { in: ['GERENTE','ENCARGADO','VENDEDOR'] } },
+    orderBy: { name: 'asc' }
+  });
 
   const breadcrumbItems = [
-    { label: "Inicio", href: "/redirect-hub" },
-    { label: "Gestionar Personal", href: "/management/users" },
-    { label: "Seleccionar Tipo", href: "/management/users/select-role" },
-    { label: "Crear Personal de Tienda" },
+    { label: 'Inicio', href: '/redirect-hub' },
+    { label: 'Gestionar Personal', href: '/management/users' },
+    { label: 'Crear Personal de Tienda' },
   ];
 
   return (
     <div className="dashboard-section">
       <Breadcrumbs items={breadcrumbItems} />
-      <h2 className="my-4">Nuevo Personal de Tienda</h2>
-      <UserForm
+      <h2 className="my-4">Nuevo Usuario de Tienda</h2>
+      <StaffForm
         stores={availableStores}
-        roles={staffRoles}
+        roles={availableRoles}
+        initialData={undefined}
         formAction={createUserAction}
-        formType="staff"
       />
     </div>
   );

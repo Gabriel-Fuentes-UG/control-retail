@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Button, Form, Row, Col, Modal, Badge, Table, Spinner } from "react-bootstrap";
+import { Button, Form, Row, Col, Modal, Badge, Table } from "react-bootstrap";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,22 @@ import { getManagedUsersForClient, toggleUserStatusAction, deleteUserAction } fr
 import { useSession } from "next-auth/react";
 import LoadingIndicator from '@/components/common/LoadingIndicator';
 import { Store } from "@prisma/client";
+
+interface UserAvatarProps {
+  name: string;
+  role: string;
+}
+
+// --- Componente de Avatar, usa variables CSS definidas por rol ---
+const UserAvatar = ({ name, role }: UserAvatarProps) => {
+  const initial = name.charAt(0).toUpperCase() || "?";
+  const normalized =
+    role.toLowerCase() === "vendedor" || role.toLowerCase() === "encargado"
+      ? "colaborador"
+      : role.toLowerCase();
+  const roleClass = `role-theme-${normalized}`;
+  return <div className={`user-avatar ${roleClass}`}>{initial}</div>;
+};
 
 // --- Íconos SVG en línea ---
 const EditIcon = ({ className = '' }: { className?: string }) => (
@@ -28,14 +44,7 @@ const ToggleRightIcon = ({ className = '' }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="1" y="5" width="22" height="14" rx="7" ry="7"></rect><circle cx="16" cy="12" r="3"></circle></svg>
 );
 
-// --- Componente de Avatar ---
-const UserAvatar = ({ name }: { name: string }) => {
-    const initial = name ? name.charAt(0).toUpperCase() : '?';
-    const a = name.charCodeAt(0) || 65;
-    const b = name.charCodeAt(1) || 66;
-    const hue = ((a + b) * 137.5) % 360;
-    return <div className="user-avatar" style={{ backgroundColor: `hsl(${hue}, 50%, 90%)`, color: `hsl(${hue}, 40%, 40%)`}}>{initial}</div>;
-};
+
 
 // --- Variantes de Animación para la Tabla ---
 const tableVariants = {
@@ -57,6 +66,7 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  
 
   const fetchUsers = useCallback(async () => {
     const fetchedUsers = await getManagedUsersForClient();
@@ -83,6 +93,35 @@ export default function UsersPage() {
     }
     return result;
   }, [users, storeFilter, searchTerm]);
+
+
+  //  Añadir después de filteredUsers:
+  const roleHierarchy = useMemo(() => [
+    'ADMINISTRADOR',
+    'SUPERVISOR',
+    'GERENTE',
+    'ENCARGADO',
+    'VENDEDOR'
+  ], []);
+
+  const sortedUsers = useMemo(() => {
+    return [...filteredUsers].sort((a, b) => {
+      // 1) comparar por nombre de tienda
+      const storeA = a.role.name === 'SUPERVISOR'
+        ? a.supervisedStores.map(ss => ss.store.name).join(', ')
+        : (a.store?.name || '');
+      const storeB = b.role.name === 'SUPERVISOR'
+        ? b.supervisedStores.map(ss => ss.store.name).join(', ')
+        : (b.store?.name || '');
+      if (storeA < storeB) return -1;
+      if (storeA > storeB) return 1;
+      // 2) misma tienda → por jerarquía de rol
+      const idxA = roleHierarchy.indexOf(a.role.name);
+      const idxB = roleHierarchy.indexOf(b.role.name);
+      return idxA - idxB;
+    });
+  }, [filteredUsers, roleHierarchy]);
+
 
   const availableStores = useMemo(() => {
     if (!session?.user?.role || (session.user.role !== 'SUPERVISOR' && session.user.role !== 'ADMINISTRADOR')) return [];
@@ -135,7 +174,7 @@ export default function UsersPage() {
         <div className="d-flex justify-content-between align-items-center my-4">
           <h2>Gestionar Personal</h2>
           {/* Se usa la nueva ruta dinámica y se deshabilita si la sesión no está lista */}
-          <Link href={addUserHref} passHref legacyBehavior>
+          <Link href={addUserHref}>
             <Button as="span" variant="primary" disabled={sessionStatus !== 'authenticated'}>
                 Agregar Usuario
             </Button>
@@ -173,9 +212,9 @@ export default function UsersPage() {
                     <thead><tr><th>Nombre</th><th>Rol</th><th>Tienda Asignada</th><th className="text-center">Estado</th><th className="text-center">Acciones</th></tr></thead>
                     <motion.tbody variants={tableVariants} initial="hidden" animate="visible">
                         <AnimatePresence>
-                            {filteredUsers.map(user => (
+                            {sortedUsers.map(user => (
                             <motion.tr key={user.id} variants={rowVariants} layout>
-                                <td><div className="d-flex align-items-center"><UserAvatar name={user.name} /><div className="ms-3"><div className="fw-bold">{user.name}</div><div className="text-muted">{user.email}</div></div></div></td>
+                                <td><div className="d-flex align-items-center"><UserAvatar name={user.name} role={user.role.name} /><div className="ms-3"><div className="fw-bold">{user.name}</div><div className="text-muted">{user.email}</div></div></div></td>
                                 <td><Badge pill bg="light" text="dark" className="role-badge">{user.role.name}</Badge></td>
                                 <td>{user.store?.name || (user.role.name === 'SUPERVISOR' ? user.supervisedStores.map(s => s.store.name).join(', ') : 'N/A')}</td>
                                 <td className="text-center"><Badge pill bg={user.isActive ? 'success-light' : 'secondary-light'} text={user.isActive ? 'success' : 'secondary'} className="status-badge">{user.isActive ? 'Activo' : 'Inactivo'}</Badge></td>

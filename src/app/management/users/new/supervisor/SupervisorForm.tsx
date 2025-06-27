@@ -3,8 +3,11 @@
 
 import { useState } from 'react';
 import { useActionState } from 'react';
-import { Form, Button, Row, Col, Alert } from 'react-bootstrap';
+import { Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+
+
 
 // --- CORRECCIÓN: Se ajustan las rutas para que sean relativas y evitar errores de resolución ---
 import StoreSelector from '../../../../../components/common/StoreSelector';
@@ -26,6 +29,21 @@ export default function SupervisorForm({ stores, supervisorRoleId, formAction }:
   const [state, submitAction, isPending] = useActionState(formAction, { success: false });
   // Estado para guardar los IDs de las tiendas seleccionadas
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  
+  const [loadingSync, setLoadingSync] = useState(false);
+  const router = useRouter();
+
+    const handleSync = async () => {
+    setLoadingSync(true);
+    try {
+      await fetch('/api/sync-stores', { method: 'POST' });
+      router.refresh();
+    } catch (e) {
+      console.error('Error al sincronizar:', e);
+    } finally {
+      setLoadingSync(false);
+    }
+  };
 
   return (
     <motion.div 
@@ -33,6 +51,7 @@ export default function SupervisorForm({ stores, supervisorRoleId, formAction }:
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
+
       <Form action={submitAction}>
         {/* Campo oculto para enviar siempre el ID del rol de Supervisor.
             Recibe su valor de forma segura desde las props. */}
@@ -52,14 +71,14 @@ export default function SupervisorForm({ stores, supervisorRoleId, formAction }:
         <Row className="mb-4">
           <Col md={6}>
             <Form.Group controlId="name">
-              <Form.Label>Nombre Completo</Form.Label>
-              <Form.Control name="fullName" type="text" placeholder="Ej: Juan Pérez" required />
+              <Form.Label></Form.Label>
+              <Form.Control name="fullName" type="text" placeholder="Nombre Completo" required />
             </Form.Group>
           </Col>
           <Col md={6}>
             <Form.Group controlId="email">
-              <Form.Label>Correo Electrónico</Form.Label>
-              <Form.Control name="email" type="email" placeholder="ejemplo@uniongroup.com" required />
+              <Form.Label></Form.Label>
+              <Form.Control name="email" type="email" placeholder="Correo Electrónico" required />
             </Form.Group>
           </Col>
         </Row>
@@ -67,8 +86,8 @@ export default function SupervisorForm({ stores, supervisorRoleId, formAction }:
         <Row className="mb-4">
             <Col md={6}>
             <Form.Group controlId="password">
-                <Form.Label>Contraseña</Form.Label>
-                <Form.Control name="password" type="password" placeholder="********" required />
+                <Form.Label></Form.Label>
+                <Form.Control name="password" type="password" placeholder="Contraseña" required />
             </Form.Group>
             </Col>
             <Col md={6} className="d-flex align-items-center pt-3">
@@ -87,6 +106,7 @@ export default function SupervisorForm({ stores, supervisorRoleId, formAction }:
           stores={stores} 
           onSelectionChange={setSelectedStoreIds}
         />
+
 
         <div className="mt-4">
           <Button variant="primary" type="submit" disabled={isPending || selectedStoreIds.length === 0}>

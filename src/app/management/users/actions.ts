@@ -11,181 +11,263 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { UserWithRelations } from "@/lib/types";
 import { Store, Role } from "@prisma/client";
 
-// --- Función de validación de seguridad (sin cambios) ---
+
+
+// --- Función de validación de seguridad ---
 async function canManageTarget(
-  actorId: string, 
-  targetRoleId: string, 
+  actorId: string,
+  targetRoleId: string,
   targetStoreIds: string[]
-): Promise<{ canProceed: boolean, message: string }> {
-  const actor = await prisma.user.findUnique({ 
-    where: { id: actorId }, 
-    include: { 
+): Promise<{ canProceed: boolean; message: string }> {
+  const actor = await prisma.user.findUnique({
+    where: { id: actorId },
+    include: {
       role: true,
       supervisedStores: { select: { storeId: true } }
     }
   });
 
-  if (!actor || !actor.role) return { canProceed: false, message: "No se encontró el usuario que realiza la acción." };
+  if (!actor || !actor.role) {
+    return { canProceed: false, message: "No se encontró el usuario que realiza la acción." };
+  }
 
   const targetRole = await prisma.role.findUnique({ where: { id: targetRoleId } });
-  if (!targetRole) return { canProceed: false, message: "El rol seleccionado no es válido." };
+  if (!targetRole) {
+    return { canProceed: false, message: "El rol seleccionado no es válido." };
+  }
 
   switch (actor.role.name) {
     case 'ADMINISTRADOR':
-      return targetRole.name !== 'ADMINISTRADOR' 
+      return targetRole.name !== 'ADMINISTRADOR'
         ? { canProceed: true, message: "" }
         : { canProceed: false, message: "Un Administrador no puede gestionar a otro." };
 
-    case 'SUPERVISOR':
+    case 'SUPERVISOR': {
       if (!['GERENTE', 'ENCARGADO', 'VENDEDOR'].includes(targetRole.name)) {
         return { canProceed: false, message: "No tienes permiso para gestionar usuarios con este rol." };
       }
       const supervisedStoreIds = actor.supervisedStores.map(s => s.storeId);
-      const isTargetStoreValid = targetStoreIds.every(id => supervisedStoreIds.includes(id));
-      return isTargetStoreValid ? { canProceed: true, message: "" } : { canProceed: false, message: "Solo puedes asignar usuarios a las tiendas que supervisas." };
+      const valid = targetStoreIds.every(id => supervisedStoreIds.includes(id));
+      return valid
+        ? { canProceed: true, message: "" }
+        : { canProceed: false, message: "Solo puedes asignar usuarios a las tiendas que supervisas." };
+    }
 
-    case 'GERENTE':
+    case 'GERENTE': {
       if (!['ENCARGADO', 'VENDEDOR'].includes(targetRole.name)) {
         return { canProceed: false, message: "No tienes permiso para gestionar usuarios con este rol." };
       }
-      if (!actor.storeId) return { canProceed: false, message: "No tienes una tienda asignada para gestionar personal." };
-      const isStoreValid = targetStoreIds.length === 1 && targetStoreIds[0] === actor.storeId;
-      return isStoreValid ? { canProceed: true, message: "" } : { canProceed: false, message: "Solo puedes asignar usuarios a tu propia tienda." };
-      
+      if (!actor.storeId) {
+        return { canProceed: false, message: "No tienes una tienda asignada para gestionar personal." };
+      }
+      const validStore = targetStoreIds.length === 1 && targetStoreIds[0] === actor.storeId;
+      return validStore
+        ? { canProceed: true, message: "" }
+        : { canProceed: false, message: "Solo puedes asignar usuarios a tu propia tienda." };
+    }
+
     default:
       return { canProceed: false, message: "No tienes permisos para gestionar usuarios." };
   }
 }
 
-// --- Acción para CREAR un usuario (VALIDACIÓN MEJORADA) ---
-export async function createUserAction(prevState: any, formData: FormData): Promise<{ success: boolean; error?: string }> {
+// --- Acción para CREAR un usuario ---
+export async function createUserAction(
+  prevState: any,
+  formData: FormData
+): Promise<{ success: boolean; error?: string }> {
   "use server";
 
-  try {
-    const fullName = formData.get("fullName");
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const roleId = formData.get("roleId");
-    const storeIds = formData.getAll("storeId") as string[];
-    const isActive = formData.get("isActive") === "on";
+  // 1) Verificar sesión
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return { success: false, error: "No autorizado." };
+  }
+  const actorId = session.user.id!;
 
-    // --- INICIO: Validación granular ---
-    if (!fullName || typeof fullName !== "string" || fullName.trim() === '') {
-        return { success: false, error: "El nombre completo es requerido." };
-    }
-    if (!email || typeof email !== "string" || email.trim() === '') {
-        return { success: false, error: "El correo electrónico es requerido." };
-    }
-    if (!password || typeof password !== "string" || password.trim() === '') {
-        return { success: false, error: "La contraseña es requerida." };
-    }
-    if (!roleId || typeof roleId !== "string") {
-        return { success: false, error: "Debes seleccionar un rol para el usuario." };
-    }
-    // --- FIN: Validación granular ---
-    
-    const roleToCreate = await prisma.role.findUnique({ where: { id: roleId } });
-    if (!roleToCreate) {
-        return { success: false, error: "El rol seleccionado no existe." };
-    }
 
-    await prisma.$transaction(async (tx) => {
-        if (roleToCreate.name === 'GERENTE') {
-            if (storeIds.length !== 1) throw new Error("Un Gerente debe ser asignado a una única tienda.");
-            const supervisorExists = await tx.supervisorStores.findFirst({ where: { storeId: storeIds[0] } });
-            if (!supervisorExists) throw new Error(`No se puede crear el Gerente porque ninguna Supervisor tiene asignada esta tienda.`);
-        }
-        if (['VENDEDOR', 'ENCARGADO'].includes(roleToCreate.name)) {
-            if (storeIds.length !== 1) throw new Error("Un Vendedor o Encargado debe ser asignado a una única tienda.");
-            const gerenteExists = await tx.user.findFirst({ where: { storeId: storeIds[0], role: { name: 'GERENTE' } } });
-            if (!gerenteExists) throw new Error(`No se puede crear el usuario porque no existe un GERENTE asignado a esta tienda.`);
-        }
-        if (roleToCreate.name === 'SUPERVISOR') {
-            if (storeIds.length === 0) throw new Error("Para crear un Supervisor, se debe seleccionar al menos una tienda a supervisar.");
-            const existingAssignments = await tx.supervisorStores.findMany({ where: { storeId: { in: storeIds } } });
-            if (existingAssignments.length > 0) {
-                 const assignedStores = await tx.store.findMany({ where: { id: { in: existingAssignments.map(a => a.storeId) } } });
-                 throw new Error(`Las siguientes tiendas ya tienen un supervisor: ${assignedStores.map(s => s.name).join(', ')}.`);
-            }
-        }
-        
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await tx.user.create({
-          data: {
-            name: fullName,
-            email,
-            password: hashedPassword,
-            role: { connect: { id: roleId } },
-            ...(roleToCreate.name !== 'SUPERVISOR' && storeIds.length === 1 ? { store: { connect: { id: storeIds[0] } } } : {}),
-            isActive,
-          },
-        });
+  // 3) Extraer campos
+  const fullName = formData.get("fullName");
+  const email    = formData.get("email");
+  const password = formData.get("password");
+  const roleId   = formData.get("roleId");
+  const rawStore = formData.get("storeId");
+  const storeIds = rawStore && typeof rawStore === "string" ? [rawStore] : [];
 
-        if (roleToCreate.name === 'SUPERVISOR' && storeIds.length > 0) {
-            await tx.supervisorStores.createMany({
-                data: storeIds.map(storeId => ({
-                    userId: newUser.id,
-                    storeId: storeId,
-                }))
-            });
-        }
-    });
-
-  } catch (e: any) {
-    if (e.code === 'P2002' && e.meta?.target?.includes('email')) {
-        return { success: false, error: 'El correo electrónico ya está en uso.' };
-    }
-    return { success: false, error: e.message || 'Ocurrió un error inesperado al crear el usuario.' };
+  // 4) Validaciones iniciales
+  if (!fullName || typeof fullName !== "string" || !fullName.trim()) {
+    return { success: false, error: "El nombre completo es requerido." };
+  }
+  if (!email || typeof email !== "string" || !email.trim()) {
+    return { success: false, error: "El correo electrónico es requerido." };
+  }
+  if (!password || typeof password !== "string" || !password.trim()) {
+    return { success: false, error: "La contraseña es requerida." };
+  }
+  if (!roleId || typeof roleId !== "string") {
+    return { success: false, error: "Debes seleccionar un rol para el usuario." };
   }
 
+  // 5) Permisos jerárquicos
+  const permission = await canManageTarget(actorId, roleId, storeIds);
+  if (!permission.canProceed) {
+    return { success: false, error: permission.message };
+  }
+
+  let newlyCreatedUserId: string | null = null;
+
+  try {
+    // 6) Validar existencia de rol
+    const roleToCreate = await prisma.role.findUnique({ where: { id: roleId } });
+    console.log("🎯 roleToCreate:", roleToCreate?.name);
+    if (!roleToCreate) {
+      console.log("❌ Rol no encontrado en BD");
+      return { success: false, error: "El rol seleccionado no existe." };
+    }
+
+    // 7) Transacción con todas las validaciones y creación
+    await prisma.$transaction(async (tx) => {
+
+      if (roleToCreate.name === "GERENTE") {
+        if (storeIds.length !== 1) {
+          throw new Error("Un Gerente debe ser asignado a una única tienda.");
+        }
+        const existingManager = await tx.user.findFirst({
+          where: { storeId: storeIds[0], role: { name: "GERENTE" } },
+        });
+        if (existingManager) {
+          throw new Error("Ya existe un Gerente en esta tienda.");
+        }
+        const sup = await tx.supervisorStores.findFirst({
+          where: { storeId: storeIds[0] },
+        });
+        if (!sup) {
+          throw new Error(
+            "No se puede crear el Gerente porque no hay Supervisor en la tienda."
+          );
+        }
+      }
+
+      if (["VENDEDOR", "ENCARGADO"].includes(roleToCreate.name)) {
+        if (storeIds.length !== 1) {
+          throw new Error(
+            "Un Vendedor o Encargado debe ser asignado a una única tienda."
+          );
+        }
+        const mgr = await tx.user.findFirst({
+          where: { storeId: storeIds[0], role: { name: "GERENTE" } },
+        });
+        if (!mgr) {
+          throw new Error(
+            "No se puede crear el usuario porque no hay Gerente en la tienda."
+          );
+        }
+      }
+
+      // 8) Crear usuario
+      const hashed = await bcrypt.hash(password as string, 10);
+      const created = await tx.user.create({
+        data: {
+          name: fullName as string,
+          email: email as string,
+          password: hashed,
+          role: { connect: { id: roleId as string } },
+          ...(roleToCreate.name !== "SUPERVISOR" && storeIds.length === 1
+            ? { store: { connect: { id: storeIds[0] } } }
+            : {}),
+          isActive: formData.get("isActive") === "on",
+        },
+      });
+      newlyCreatedUserId = created.id;
+
+      // 9) Si es Supervisor, asignar tiendas
+      if (roleToCreate.name === "SUPERVISOR") {
+        await tx.supervisorStores.createMany({
+          data: storeIds.map((id) => ({ userId: created.id, storeId: id })),
+        });
+      }
+    });
+
+    // 10) Confirmar fuera de tx
+    const verify = await prisma.user.findUnique({
+      where: { id: newlyCreatedUserId! },
+      include: { store: true, role: true },
+    });
+  } catch (e: any) {
+    if (e.code === "P2002" && e.meta?.target?.includes("email")) {
+      return { success: false, error: "El correo electrónico ya está en uso." };
+    }
+    return { success: false, error: e.message || "Error inesperado al crear el usuario." };
+  }
+
+  // 11) Redirigir
   revalidatePath("/management/users");
   redirect("/management/users");
+  return { success: true };
 }
 
 
-// --- ACCIÓN PARA ACTUALIZAR (VALIDACIÓN MEJORADA) ---
+
+// --- Acción para ACTUALIZAR un usuario ---
 export async function updateUserAction(prevState: any, formData: FormData): Promise<{ success: boolean; error?: string }> {
-  "use server"
-  
+  "use server";
+
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return { success: false, error: "No autorizado." };
+  }
+  const actorId = session.user.id!;
+
+  const id = formData.get("id");
+  const fullName = formData.get("fullName");
+  const email = formData.get("email");
+  const password = formData.get("password");
+  const isActive = formData.get("isActive") === "on";
+
+  if (typeof id !== "string") {
+    return { success: false, error: "ID de usuario no válido." };
+  }
+
+  // Verificar permiso de actor
+  const target = await prisma.user.findUnique({ where: { id }, include: { role: true, store: true } });
+  if (!target) {
+    return { success: false, error: "Usuario no encontrado." };
+  }
+  const perm = await canManageTarget(actorId, target.roleId, target.storeId ? [target.storeId] : []);
+  if (!perm.canProceed) {
+    return { success: false, error: perm.message };
+  }
+
+  // Validaciones de campos
+  if (!fullName || typeof fullName !== "string" || !fullName.trim()) {
+    return { success: false, error: "El nombre completo es requerido." };
+  }
+  if (!email || typeof email !== "string" || !email.trim()) {
+    return { success: false, error: "El correo electrónico es requerido." };
+  }
+
   try {
-    const id = formData.get("id");
-    const fullName = formData.get("fullName");
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const isActive = formData.get("isActive") === "on";
-
-    if (typeof id !== "string") {
-        return { success: false, error: "ID de usuario no válido." };
-    }
-    if (!fullName || typeof fullName !== "string" || fullName.trim() === '') {
-        return { success: false, error: "El nombre completo es requerido." };
-    }
-    if (!email || typeof email !== "string" || email.trim() === '') {
-        return { success: false, error: "El correo electrónico es requerido." };
-    }
-
     await prisma.user.update({
       where: { id },
       data: {
         name: fullName,
         email,
-        ...(typeof password === "string" && password.trim() !== ''
-          ? { password: await bcrypt.hash(password, 10) }
-          : {}),
+        ...(typeof password === "string" && password.trim() ? { password: await bcrypt.hash(password, 10) } : {}),
         isActive,
-      },
-    })
+      }
+    });
   } catch (e: any) {
     if (e.code === 'P2002' && e.meta?.target?.includes('email')) {
-        return { success: false, error: 'El correo electrónico ya está en uso.' };
+      return { success: false, error: 'El correo electrónico ya está en uso.' };
     }
     console.error("Error en updateUserAction:", e);
-    return { success: false, error: 'Ocurrió un error inesperado al actualizar el usuario.' };
+    return { success: false, error: 'Error inesperado al actualizar el usuario.' };
   }
 
   revalidatePath("/management/users");
-  revalidatePath(`/management/users/edit/${formData.get("id")}`);
+  revalidatePath(`/management/users/edit/${id}`);
   redirect("/management/users");
+  return { success: true };
 }
 
 // --- ACCIÓN DE ROLES DINÁMICOS (LÓGICA MÁS ROBUSTA) ---

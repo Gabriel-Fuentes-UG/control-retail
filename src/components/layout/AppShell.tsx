@@ -32,7 +32,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const userRole = session.user.role;
   const roleThemeMap: { [key: string]: string } = {
-    'ADMINISTRADOR': 'role-theme-admin',
+    'ADMINISTRADOR': 'role-theme-administrador',
     'SUPERVISOR': 'role-theme-supervisor',
     'GERENTE': 'role-theme-gerente',
     'ENCARGADO': 'role-theme-colaborador',

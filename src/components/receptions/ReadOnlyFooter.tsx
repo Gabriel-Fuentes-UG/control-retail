@@ -18,7 +18,7 @@ export default function ReadOnlyFooter({ folioSAP }: ReadOnlyFooterProps) {
                 <Card.Text>
                     Esta recepción ya ha sido procesada y no puede ser modificada.
                 </Card.Text>
-                <Link href={pdfUrl} passHref legacyBehavior>
+                <Link href={pdfUrl}>
                     <a target="_blank" rel="noopener noreferrer">
                         <Button variant="secondary">
                             Descargar Informe PDF

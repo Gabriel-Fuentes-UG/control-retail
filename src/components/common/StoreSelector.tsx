@@ -3,7 +3,8 @@
 
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Form } from 'react-bootstrap';
+import { Form , Spinner, Button} from 'react-bootstrap';
+import { useRouter } from 'next/navigation';
 
 // --- Íconos SVG en línea ---
 const StoreIcon = ({ className = '' }: { className?: string }) => (
@@ -101,6 +102,22 @@ export default function StoreSelector({ stores, onSelectionChange }: StoreSelect
       store.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [stores, searchTerm]);
+    
+    const [loadingSync, setLoadingSync] = useState(false);
+    const router = useRouter();
+  
+      const handleSync = async () => {
+      setLoadingSync(true);
+      try {
+        await fetch('/api/sync-stores', { method: 'POST' });
+        router.refresh();
+      } catch (e) {
+        console.error('Error al sincronizar:', e);
+      } finally {
+        setLoadingSync(false);
+      }
+    };
+  
 
   return (
     <div className="store-selector-container">
@@ -123,7 +140,18 @@ export default function StoreSelector({ stores, onSelectionChange }: StoreSelect
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="border-start-0"
             />
+                   <Button
+         variant="outline-secondary"
+         onClick={handleSync}
+         disabled={loadingSync}
+       >
+         {loadingSync
+           ? <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
+           : 'Actualizar ⟳'
+         }
+       </Button>
         </div>
+        
       </motion.div>
 
       <motion.div
