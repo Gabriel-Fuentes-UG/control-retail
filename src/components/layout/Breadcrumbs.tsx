@@ -1,13 +1,18 @@
 // src/components/layout/Breadcrumbs.tsx
-"use client";
+'use client';
+
 import Link from 'next/link';
 import { Breadcrumb as BsBreadcrumb } from 'react-bootstrap';
+
 type BreadcrumbItem = {
   href?: string;
   label: string;
-  onClick?: () => void; // <-- Nueva propiedad opcional
+  onClick?: () => void;
 };
-type BreadcrumbsProps = { items: BreadcrumbItem[] };
+
+type BreadcrumbsProps = {
+  items: BreadcrumbItem[];
+};
 
 export default function Breadcrumbs({ items }: BreadcrumbsProps) {
   return (
@@ -15,11 +20,16 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
       {items.map((item, index) => (
         <BsBreadcrumb.Item
           key={index}
-          linkAs={item.href ? Link : 'span'} // Si no hay href, es un span
-          href={item.href || ''}
+          // La lógica aquí es correcta: si hay href, usa Link, si no, un span.
+          linkAs={item.href && item.href !== '#' ? Link : 'span'}
+          
+          // CORRECCIÓN: Se pasa `item.href` directamente. 
+          // Si es `undefined`, el prop no se pasará, evitando el error.
+          href={item.href}
+          
           active={index === items.length - 1}
-          onClick={item.onClick} // <-- Pasamos el onClick
-          style={item.onClick ? {cursor: 'pointer'} : {}}
+          onClick={item.onClick}
+          style={item.onClick ? { cursor: 'pointer' } : {}}
         >
           {item.label}
         </BsBreadcrumb.Item>

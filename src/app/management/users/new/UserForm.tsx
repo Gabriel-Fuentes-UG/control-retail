@@ -1,120 +1,75 @@
-// src/app/management/users/new/UserForm.tsx
-'use client'
+// Asumiendo que la ruta del archivo es: src/app/management/users/UserForm.tsx
+'use client';
 
-import React, { useState, useEffect } from "react"
-import { Form, Button, Row, Col } from "react-bootstrap"
-import { CreateUserData, UpdateUserData } from "../actions"
+import { useState, useEffect } from 'react';
+import { useActionState } from 'react';
+import { Form, Button, Row, Col, Alert, Spinner } from 'react-bootstrap';
+// --- CORRECCIÓN: Se ajusta la ruta relativa para encontrar el archivo de acciones ---
+import { getAvailableRolesForStoreAction } from '../actions';
+// --- CORRECCIÓN: Se usa una ruta relativa para el componente del switch ---
+import AnimatedToggleSwitch from '@/components/common/AnimatedToggleSwitch'; 
 
-interface Role  { id: string; name: string }
+// --- Interfaces ---
+interface Role { id: string; name: string }
 interface Store { id: string; name: string; isActive: boolean }
-
-// Definimos un tipo unificado para New vs Edit
+interface UserFormData {
+  id: string;
+  name: string;
+  email: string;
+  roleId: string;
+  storeId: string | null;
+  isActive: boolean;
+}
 interface UserFormProps {
-  roles: Role[]
-  stores: Store[]
-  // Si viene `user`, es edición; si no, es creación
-  user?: {
-    id: string
-    name: string
-    email: string
-    roleId: string
-    storeId: string
-    isActive: boolean
-  }
-  // Según sea new/edit, apuntamos a la action correspondiente
-  formAction: (formData: FormData) => Promise<any>
+  roles: Role[];
+  stores: Store[];
+  user?: UserFormData;
+  formAction: (prevState: any, formData: FormData) => Promise<{ success: boolean; error?: string }>;
+  formType: 'supervisor' | 'staff' | 'edit';
 }
 
-export default function UserForm({ roles, stores, user, formAction }: UserFormProps) {
-  const [name,    setName]    = useState("")
-  const [email,   setEmail]   = useState("")
-  const [password,setPassword]= useState("")
-  const [roleId,  setRoleId]  = useState("")
-  const [storeId, setStoreId] = useState("")
-  const [isActive,setIsActive]= useState(true)
+export default function UserForm({
+  roles: initialRoles,
+  stores,
+  user,
+  formAction,
+  formType,
+}: UserFormProps) {
+  const [state, submitAction, isPending] = useActionState(formAction, { success: false });
 
-  // Al montar (o cuando cambie `user`), poblamos los estados
+  // Estados para los campos controlados
+  const [selectedStoreId, setSelectedStoreId] = useState(user?.storeId || '');
+  const [selectedRoleId, setSelectedRoleId] = useState(user?.roleId || '');
+  const [availableRoles, setAvailableRoles] = useState<Role[]>(initialRoles);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
+
+  // Efecto para la lógica dinámica de roles
   useEffect(() => {
-    if (user) {
-      setName(user.name)
-      setEmail(user.email)
-      setRoleId(user.roleId)
-      setStoreId(user.storeId)
-      setIsActive(user.isActive)
-      // dejamos password en blanco para no forzar cambio
-      setPassword("")
+    if (formType !== 'staff' || !selectedStoreId) {
+      setAvailableRoles(initialRoles);
+      return;
     }
-  }, [user])
+
+    const fetchRoles = async () => {
+      setIsLoadingRoles(true);
+      const newRoles = await getAvailableRolesForStoreAction(selectedStoreId);
+      setAvailableRoles(newRoles);
+      if (newRoles.length === 1) {
+        setSelectedRoleId(newRoles[0].id);
+      } else if (!newRoles.find(r => r.id === selectedRoleId)) {
+        setSelectedRoleId('');
+      }
+      setIsLoadingRoles(false);
+    };
+
+    fetchRoles();
+  }, [selectedStoreId, formType, initialRoles, selectedRoleId]);
 
   return (
-   <Form action={formAction}>
-    {/* ← Campo oculto para el id (sólo en edición) */}
-    {user && (
-      <input type="hidden" name="id" value={user.id} />
-    )}
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Group controlId="name">
-            <Form.Label>Nombre Completo</Form.Label>
-            <Form.Control
-              name="fullName"
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-            />
-          </Form.Group>
-        </Col>
-        <Col md={6}>
-          <Form.Group controlId="email">
-            <Form.Label>Correo Electrónico</Form.Label>
-            <Form.Control
-              name="email"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
-          </Form.Group>
-        </Col>
-      </Row>
+    <Form action={submitAction}>
+      {state?.error && <Alert variant="danger">{state.error}</Alert>}
 
-      {/* Contraseña solo en edición es opcional */}
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Group controlId="password">
-            <Form.Label>
-              Contraseña
-              {user ? " (dejar en blanco para no cambiar)" : ""}
-            </Form.Label>
-            <Form.Control
-              name="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="********"
-              // required solo si NO es edición
-              {...(user ? {} : { required: true })}
-            />
-          </Form.Group>
-        </Col>
-        <Col md={6}>
-          <Form.Group controlId="roleId">
-            <Form.Label>Rol</Form.Label>
-            <Form.Select
-              name="roleId"
-              value={roleId}
-              onChange={e => setRoleId(e.target.value)}
-              required
-            >
-              <option value="">Selecciona un rol…</option>
-              {roles.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </Form.Select>
-          </Form.Group>
-        </Col>
-      </Row>
+      {user && <input type="hidden" name="id" value={user.id} />}
 
       <Row className="mb-3">
         <Col md={6}>
@@ -122,33 +77,81 @@ export default function UserForm({ roles, stores, user, formAction }: UserFormPr
             <Form.Label>Tienda Asignada</Form.Label>
             <Form.Select
               name="storeId"
-              value={storeId}
-              onChange={e => setStoreId(e.target.value)}
-              required
+              value={selectedStoreId || ''}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              disabled={formType === 'edit'}
             >
               <option value="">Selecciona una tienda…</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </Form.Select>
           </Form.Group>
         </Col>
-        <Col md={6} className="d-flex align-items-center">
-          <Form.Group controlId="isActive" className="w-100">
-            <Form.Check
-              type="switch"
-              name="isActive"
-              label="Usuario Activo"
-              checked={isActive}
-              onChange={e => setIsActive(e.target.checked)}
-            />
+        <Col md={6}>
+          <Form.Group controlId="roleId">
+            <Form.Label>Rol</Form.Label>
+            <div className="d-flex align-items-center">
+              <Form.Select
+                name="roleId"
+                value={selectedRoleId}
+                onChange={(e) => setSelectedRoleId(e.target.value)}
+                required
+                disabled={isLoadingRoles || formType === 'edit'}
+              >
+                <option value="">
+                  {isLoadingRoles ? 'Cargando...' : 'Selecciona un rol'}
+                </option>
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Form.Select>
+              {isLoadingRoles && <Spinner animation="border" size="sm" className="ms-2" />}
+            </div>
           </Form.Group>
         </Col>
       </Row>
 
-      <Button variant="primary" type="submit">
-        {user ? "Guardar Cambios" : "Crear Usuario"}
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group controlId="name">
+            <Form.Label>Nombre Completo</Form.Label>
+            <Form.Control name="fullName" type="text" defaultValue={user?.name} required />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group controlId="email">
+            <Form.Label>Correo Electrónico</Form.Label>
+            <Form.Control name="email" type="email" defaultValue={user?.email} required />
+          </Form.Group>
+        </Col>
+      </Row>
+
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group controlId="password">
+            <Form.Label>
+              Contraseña {user ? ' (dejar en blanco para no cambiar)' : ''}
+            </Form.Label>
+            <Form.Control name="password" type="password" placeholder="********" {...(user ? {} : { required: true })} />
+          </Form.Group>
+        </Col>
+        <Col md={6} className="d-flex align-items-center pt-3">
+          <AnimatedToggleSwitch
+            label="Usuario Activo"
+            name="isActive"
+            defaultChecked={user?.isActive ?? true}
+          />
+        </Col>
+      </Row>
+
+      <Button variant="primary" type="submit" disabled={isPending}>
+        {isPending ? 'Procesando...' : user ? 'Guardar Cambios' : 'Crear Usuario'}
       </Button>
     </Form>
-  )
+  );
 }

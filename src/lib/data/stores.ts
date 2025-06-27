@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 
-const SYNC_TTL_HOURS = 6; // Tiempo de vida del caché en horas
+const SYNC_TTL_HOURS = 2; // Tiempo de vida del caché en horas
 
 type ApiStore = {
   "Código Tienda": string;

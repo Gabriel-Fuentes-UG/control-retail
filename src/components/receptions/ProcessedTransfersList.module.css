@@ -1,0 +1,22 @@
+/* src/components/receptions/ProcessedTransfersList.module.css */
+
+/* Estilo para filas con estado exitoso (Cerrado, Parcial) */
+.rowSuccess td {
+  /* Usamos un color de fondo con transparencia para que no sea tan intenso */
+  background-color: rgba(40, 167, 69, 0.08) !important; 
+}
+
+/* Estilo para filas con estado de error (Cancelado) */
+.rowDanger td {
+  background-color: rgba(220, 53, 69, 0.08) !important;
+}
+
+/* Mejoramos el efecto hover para que sea un poco más oscuro y evidente */
+.rowSuccess:hover td {
+  background-color: rgba(40, 167, 69, 0.15) !important;
+}
+
+.rowDanger:hover td {
+  background-color: rgba(220, 53, 69, 0.15) !important;
+}
+

@@ -33,3 +33,10 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 }
+
+// Define un tipo simple para la tienda, que usas en varios lugares.
+type StoreInfo = {
+  id: string;
+  name: string | null;
+  // Añade otros campos de la tienda si los necesitas en la sesión.
+};

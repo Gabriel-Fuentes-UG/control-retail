@@ -1,0 +1,31 @@
+BEGIN TRY
+
+BEGIN TRAN;
+
+-- CreateTable
+CREATE TABLE [dbo].[Transfer] (
+    [folioSAP] NVARCHAR(1000) NOT NULL,
+    [numAtCard] NVARCHAR(1000) NOT NULL,
+    [docNum] NVARCHAR(1000) NOT NULL,
+    [fecha] DATETIME2 NOT NULL,
+    [memo] NVARCHAR(1000),
+    [originStoreId] NVARCHAR(1000) NOT NULL,
+    [destinationStoreId] NVARCHAR(1000) NOT NULL,
+    [status] NVARCHAR(1000) NOT NULL,
+    [createdAt] DATETIME2 NOT NULL CONSTRAINT [Transfer_createdAt_df] DEFAULT CURRENT_TIMESTAMP,
+    [updatedAt] DATETIME2 NOT NULL,
+    CONSTRAINT [Transfer_pkey] PRIMARY KEY CLUSTERED ([folioSAP])
+);
+
+COMMIT TRAN;
+
+END TRY
+BEGIN CATCH
+
+IF @@TRANCOUNT > 0
+BEGIN
+    ROLLBACK TRAN;
+END;
+THROW
+
+END CATCH

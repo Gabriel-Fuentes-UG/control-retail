@@ -10,15 +10,18 @@ import {
   FaUsers, 
   FaUserTag, 
   FaBoxOpen, 
-  FaTruckLoading 
+  FaTruckLoading,
+  FaSearch, // Nuevo icono para la consulta
 } from "react-icons/fa";
 
-// Lista de enlaces a FUNCIONALIDADES (hemos quitado todos los de "Inicio")
+// Lista de enlaces a FUNCIONALIDADES
 const functionalNavLinks = [
   { href: "/management/users", text: "Gestionar Personal", icon: <FaUsers />, requiredPermission: "users:read" },
   { href: "/admin/roles", text: "Roles y Permisos", icon: <FaUserTag />, requiredPermission: "system:manage-roles" },
   
   { href: "/operaciones/receptions", text: "Recepciones", icon: <FaBoxOpen />, requiredPermission: "receptions:create" },
+  // NUEVO ENLACE A CONSULTAS
+  { href: "/operaciones/consultations", text: "Consulta Recepciones", icon: <FaSearch />, requiredPermission: "receptions:read" },
   { href: "/operaciones/transfers", text: "Traslados", icon: <FaTruckLoading />, requiredPermission: "transfers:create" },
 
 ];
@@ -40,13 +43,17 @@ export default function SideNav({ isCollapsed }: { isCollapsed: boolean }) {
       text: "Inicio",
       icon: <FaHome />,
     };
-    availableLinks.unshift(homeLink);
+    // Evitar duplicados si la homeRoute es una de las funcionales
+    if (!availableLinks.some(l => l.href === homeLink.href)) {
+        availableLinks.unshift(homeLink);
+    }
   }
 
   return (
     <nav className={styles.sidebarNav}>
       <ul>
         {availableLinks.map((link) => {
+          // La comprobación de ruta activa ahora también considera la nueva ruta de consulta
           const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
           const linkClasses = [
             styles.navLink,

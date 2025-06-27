@@ -1,106 +1,99 @@
 // src/app/operaciones/receptions/preview/[folioSAP]/page.tsx
-import Breadcrumbs from "@/components/layout/Breadcrumbs";
-import PreviewTabs, { PreviewItem } from "@/components/receptions/PreviewTabs";
-import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { redirect } from "next/navigation";
-import { 
-  getTransferDetailsAction, 
-  getIncomingTransfersAction, // Se importa la acción que tiene el NombreOrigen
+
+import React from 'react';
+import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { redirect } from 'next/navigation';
+import {
+  getTransferPreviewDetailsAction,
   TransferDetail,
-  IncomingTransfer 
-} from "@/app/operaciones/receptions/actions";
+} from '@/app/operaciones/receptions/actions';
+import LivePreviewHandler from './LivePreviewHandler';
+
+interface PreviewPageProps {
+  // --- CORRECCIÓN ---
+  // Se tipan como Promesas para reflejar el cambio en Next.js 15
+  params: Promise<{ folioSAP: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
 
 export default async function PreviewPage({
-  params,
-}: {
-  params: { folioSAP: string };
-}) {
+  params: paramsPromise,
+  searchParams: searchParamsPromise,
+}: PreviewPageProps) {
+  // 1) Se resuelven las promesas para obtener los objetos
+  const params = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+
+  // Ahora se puede acceder a las propiedades de forma segura
   const { folioSAP } = params;
+  const statusParam = Array.isArray(searchParams.status)
+    ? searchParams.status[0]
+    : searchParams.status;
+  const docNumParam = Array.isArray(searchParams.docNum)
+    ? searchParams.docNum[0]
+    : searchParams.docNum;
 
+  // 2) Autenticación (sin cambios)
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect('/login');
 
-  // --- OBTENER DATOS (AMBAS LLAMADAS EN PARALELO PARA EFICIENCIA) ---
-  const [detailsResponse, incomingTransfers] = await Promise.all([
-    getTransferDetailsAction(Number(folioSAP)),
-    getIncomingTransfersAction()
-  ]);
+  // 3) Movimiento local (sin cambios)
+  const movement = await prisma.movement.findUnique({
+    where: { documentNumber: folioSAP },
+    include: { status: true, originStore: true },
+  });
+  if (!movement) redirect('/operaciones/receptions');
 
-  // --- MANEJO DE ERRORES AL OBTENER DETALLES DE ARTÍCULOS ---
-  if (detailsResponse.error || !detailsResponse.data) {
-    return (
-      <div className="p-4">
-        <h2 className="text-xl font-bold text-red-600">Error al Cargar Detalles</h2>
-        <p>No se pudo obtener la información de los artículos para el folio {folioSAP}.</p>
-        <p className="mt-2 text-sm text-gray-500">
-          <strong>Motivo:</strong> {detailsResponse.error || "No se encontraron datos en la API."}
-        </p>
-      </div>
-    );
-  }
-  
-  const originalDetails: TransferDetail[] = detailsResponse.data;
+  const isReadOnly = movement.status.name !== 'EN_PREPARACION';
+  const originName = movement.originStore?.name ?? '—';
+  const receivedBy = session.user?.name ?? '—';
 
-  // --- LÓGICA PARA OBTENER EL NOMBRE DEL ORIGEN ---
-  const transferHeader = incomingTransfers.find(t => String(t.FolioSAP) === folioSAP);
-  const originName = transferHeader?.NombreOrigen ?? "Origen no encontrado";
+  // 4) Traer detalles desde la API externa (sin cambios)
+  const detailsResponse = await getTransferPreviewDetailsAction(
+    Number(folioSAP)
+  );
+  const originalDetails: TransferDetail[] =
+    detailsResponse.error || !detailsResponse.data
+      ? []
+      : detailsResponse.data;
 
-  // --- LÓGICA PARA PROCESAR LOS ITEMS Y COMBINAR CON LOGS ---
+  // 5) Logs guardados (sin cambios)
   const receptionLogs = await prisma.receptionLog.findMany({
     where: { folioSAP },
-    orderBy: { linenum: "asc" },
+    orderBy: { linenum: 'asc' },
   });
+  const logByLine = new Map<number, typeof receptionLogs[0]>();
+  receptionLogs.forEach((l) => logByLine.set(l.linenum, l));
 
-  const logByLineNum = new Map<number, typeof receptionLogs[0]>();
-  for (const log of receptionLogs) {
-    logByLineNum.set(log.linenum, log);
-  }
-
-  const items: PreviewItem[] = originalDetails.map((detail) => {
-    const log = logByLineNum.get(detail.Linenum);
-    const cantidadEsperada = detail.Cantidad;
-    const cantidadRecibida = log ? log.cantidadRecibida : cantidadEsperada;
-    
+  // 6) Combinar ítems (sin cambios)
+  const items = originalDetails.map((d) => {
+    const log = logByLine.get(d.Linenum);
+    const recibida =
+      isReadOnly && log ? log.cantidadRecibida : d.Cantidad;
     return {
-      linenum: detail.Linenum,
-      articulo: detail.Articulo,
-      descripcion: detail.Descripcion,
-      cantidadEsperada: cantidadEsperada,
-      cantidadRecibida: cantidadRecibida,
-      diferencia: cantidadRecibida - cantidadEsperada,
-      motivo: log?.motivo ?? null,
-      observaciones: log?.observaciones ?? null,
-      createdAt: log?.createdAt ?? new Date(),
+      linenum: d.Linenum,
+      articulo: d.Articulo,
+      descripcion: d.Descripcion,
+      codeBars: d.CodeBars,
+      cantidadEsperada: d.Cantidad,
+      cantidadRecibida: recibida,
+      diferencia: recibida - d.Cantidad,
+      createdAt: (log?.createdAt ?? new Date()).toISOString(),
     };
   });
 
-  // --- CONFIGURACIÓN DE BREADCRUMBS ---
-  const breadcrumbs = [
-    { label: "Inicio", href: "/redirect-hub" },
-    { label: "Recepciones", href: "/operaciones/receptions" },
-    { label: `Conciliación Folio ${folioSAP}`, href: `/operaciones/receptions?folio=${folioSAP}`},
-    { label: "Previsualización" },
-  ];
-
+  // 7) Renderizar componente cliente, pasándole status y docNum (sin cambios)
   return (
-    <div className="p-4 md:p-6">
-      <Breadcrumbs items={breadcrumbs} />
-      <div className="mt-4">
-        <h2 className="text-2xl font-bold text-gray-800">Previsualización de Recepción</h2>
-        <div className="mt-2 text-sm text-gray-600">
-          <span><strong>Origen:</strong> {originName}</span>
-          <span className="mx-2">|</span>
-          <span><strong>Folio SAP:</strong> {folioSAP}</span>
-          <span className="mx-2">|</span>
-          <span><strong>Recibido por:</strong> {session.user?.name}</span>
-        </div>
-      </div>
-<br/>
-      <div className="mt-6">
-        <PreviewTabs items={items} />
-      </div>
-    </div>
+    <LivePreviewHandler
+      items={items}
+      isReadOnly={isReadOnly}
+      originName={originName}
+      folioSAP={folioSAP}
+      receivedBy={receivedBy}
+      status={statusParam}
+      docNum={docNumParam}
+    />
   );
 }

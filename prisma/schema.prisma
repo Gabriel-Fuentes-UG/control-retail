@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -98,6 +100,19 @@ model Inventory {
 
   @@unique([storeId, productId])
 }
+model Transfer {
+  folioSAP            String   @id                                   // varchar
+  numAtCard           String
+  docNum              String
+  fecha               DateTime
+  memo                String?
+  originStoreId       String
+  destinationStoreId  String
+  status              String                                   // 'PENDIENTE' | 'TOTAL' | 'PARCIAL' | 'CANCELADO'
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
 
 // =======================================
 // Modelos de Movimientos (Entradas/Salidas)
@@ -117,31 +132,36 @@ model MovementStatus {
 }
 
 model Movement {
-  id String @id @default(cuid())
+  id                String   @id @default(cuid())
+  documentNumber    String?  @unique // ← IMPORTANTE
+  transactionNumber String?
+  observations      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  /// **AHORA ÚNICO** para permitir la relación con ReceptionLog
-  documentNumber String? @unique
+  // Tipo de movimiento
+  typeId String
+  type   MovementType @relation(fields: [typeId], references: [id])
 
-  observations String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  typeId   String
-  type     MovementType   @relation(fields: [typeId], references: [id])
+  // Estado propio del traslado
   statusId String
   status   MovementStatus @relation(fields: [statusId], references: [id])
 
+  // Origen y destino
   originStoreId      String?
   originStore        Store?  @relation("OriginStoreMovements", fields: [originStoreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   destinationStoreId String?
   destinationStore   Store?  @relation("DestinyStoreMovements", fields: [destinationStoreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  // Usuario que confirma
   confirmedByUserId String?
   confirmedByUser   User?   @relation("ConfirmedByUserRelation", fields: [confirmedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  // Detalle y trazabilidad
   items MovementItem[]
   boxes Box[]
 
+  // Sub-movimientos
   parentMovementId String?
   parentMovement   Movement?  @relation("SubMovements", fields: [parentMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   subMovements     Movement[] @relation("SubMovements")
@@ -149,7 +169,7 @@ model Movement {
   incidents       TransferIncident[]
   inventoryLosses InventoryLoss[]
 
-  // relación validada
+  // Logs de recepción vinculados por folioSAP
   receptionLogs ReceptionLog[] @relation("TransferLogs")
 }
 
@@ -174,6 +194,9 @@ model Box {
   items      MovementItem[]
 }
 
+// =======================================
+// Nuevos Modelos para Trazabilidad e Incidencias
+// =======================================
 model TransferIncident {
   id         String   @id @default(cuid())
   movementId String
@@ -206,6 +229,9 @@ model InventoryLoss {
   movement   Movement? @relation(fields: [movementId], references: [id])
 }
 
+// =======================================
+// Modelo de Auditoría
+// =======================================
 model AuditLog {
   id        String   @id @default(cuid())
   timestamp DateTime @default(now())
@@ -215,6 +241,9 @@ model AuditLog {
   details   String?
 }
 
+// =======================================
+// Registro de líneas recepcionadas
+// =======================================
 model ReceptionLog {
   id               String   @id @default(cuid())
   folioSAP         String
@@ -223,11 +252,10 @@ model ReceptionLog {
   cantidadEsperada Int
   cantidadRecibida Int
   diferencia       Int
-  motivo           String? // null si no aplica
-  observaciones    String? // notas opcionales
+  motivo           String?
+  observaciones    String?
   createdAt        DateTime @default(now())
 
-  // ya referencia correctamente a Movement.documentNumber
   movement Movement? @relation("TransferLogs", fields: [folioSAP], references: [documentNumber])
 
   @@unique([folioSAP, linenum], name: "unique_folio_linenum")

@@ -24,34 +24,18 @@ const permissions = [
   { action: 'incidents:detect', description: 'Permite reportar un traslado como desviado.' },
   { action: 'incidents:resolve', description: 'Permite resolver una incidencia de traslado (recibir o reenviar).' },
   { action: 'inventory:report-loss', description: 'Permite registrar una pérdida de inventario.' },
+  { action: 'incidents:detect', description: 'Permite reportar un traslado como desviado.' },
+  { action: 'incidents:resolve', description: 'Permite resolver una incidencia de traslado.' },
+  { action: 'inventory:report-loss', description: 'Permite registrar una pérdida de inventario.' },
+
 ];
 
 const roleDefinitions = [
-  {
-    name: 'ADMINISTRADOR',
-    homeRoute: '/admin/home',
-    permissions: ['users:read', 'system:manage-roles', 'reports:read:all-stores', 'incidents:resolve']
-  },
-  {
-    name: 'SUPERVISOR',
-    homeRoute: '/supervisor/home',
-    permissions: ['users:read', 'reports:read:supervised-stores', 'transfers:create', 'receptions:create', 'receptions:read', 'incidents:resolve', 'inventory:report-loss']
-  },
-  {
-    name: 'GERENTE',
-    homeRoute: '/gerente/home',
-    permissions: ['users:read', 'reports:read:own-store', 'transfers:create', 'receptions:create', 'receptions:read', 'incidents:detect', 'inventory:report-loss']
-  },
-  {
-    name: 'ENCARGADO',
-    homeRoute: '/colaborador/home',
-    permissions: ['transfers:create', 'receptions:create', 'receptions:read', 'incidents:detect']
-  },
-  {
-    name: 'VENDEDOR',
-    homeRoute: '/colaborador/home',
-    permissions: ['transfers:read', 'receptions:create', 'receptions:read']
-  },
+    { name: 'ADMINISTRADOR', homeRoute: '/admin/home', permissions: ['users:read', 'system:manage-roles', 'reports:read:all-stores', 'incidents:resolve'] },
+    { name: 'SUPERVISOR', homeRoute: '/supervisor/home', permissions: ['users:read', 'reports:read:supervised-stores', 'transfers:create', 'receptions:create', 'incidents:resolve', 'inventory:report-loss'] },
+    { name: 'GERENTE', homeRoute: '/gerente/home', permissions: ['users:read', 'reports:read:own-store', 'transfers:create', 'receptions:create', 'incidents:detect', 'inventory:report-loss','receptions:read'] },
+    { name: 'ENCARGADO', homeRoute: '/colaborador/home', permissions: ['transfers:create', 'receptions:create', 'incidents:detect','receptions:read'] },
+    { name: 'VENDEDOR', homeRoute: '/colaborador/home', permissions: ['transfers:read', 'receptions:read','receptions:read', 'receptions:create'] }
 ];
 
 const movementTypes = [
@@ -66,10 +50,16 @@ const movementTypes = [
 
 // Ajustamos solo los cuatro estados que usaremos para el flujo de recepciones
 const movementStatuses = [
-  { name: 'PENDIENTE', description: 'Traslado pendiente de recepción.' },
-  { name: 'PARCIAL',   description: 'Recepción parcial con diferencias.' },
-  { name: 'TOTAL',     description: 'Recepción total sin diferencias.' },
-  { name: 'CANCELADO', description: 'Traslado cancelado.' },
+    { name: 'EN_PREPARACION', description: 'El traslado se está armando.' },
+    { name: 'EN_TRANSITO', description: 'El traslado ya fue enviado y está en camino.' },
+    { name: 'RECIBIDO_PARCIAL', description: 'Se recibió el traslado, pero aún no se confirma el contenido.' },
+    { name: 'CERRADO', description: 'El ciclo del movimiento se completó exitosamente.' },
+    { name: 'CANCELADO', description: 'El movimiento fue cancelado antes de completarse.' },
+    // Nuevos estados de tu propuesta
+    { name: 'DESVIADO', description: 'El traslado fue detectado en una ubicación incorrecta.' },
+    { name: 'EN_REASIGNACION', description: 'Un supervisor está gestionando la incidencia del desvío.' },
+    { name: 'CERRADO_CON_INCIDENCIA', description: 'El ciclo se cerró pero se resolvió a partir de un desvío.' },
+    { name: 'PERDIDO_O_ROBADO', description: 'El traslado fue reportado como perdido o robado.' },
 ];
 
 async function main() {
@@ -141,6 +131,16 @@ async function main() {
         isActive: true,
       },
     });
+      await prisma.movementType.upsert({
+    where: { name: "TRASLADO_INTERNO" },
+    update: {},
+    create: { name: "TRASLADO_INTERNO", description: "Traslado entre tiendas" }
+  });
+  await prisma.movementStatus.upsert({
+    where: { name: "EN_PREPARACION" },
+    update: {},
+    create: { name: "EN_PREPARACION", description: "En preparación" }
+  });
     console.log('Admin user created/verified.');
   }
 
