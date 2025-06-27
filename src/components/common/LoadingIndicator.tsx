@@ -60,7 +60,7 @@ export default function LoadingIndicator({ message = "Cargando datos..." }: Load
         <motion.span style={{ width: '15px', height: '15px', backgroundColor: '#0d6efd', borderRadius: '50%' }} variants={dotVariants} />
         <motion.span style={{ width: '15px', height: '15px', backgroundColor: '#0d6efd', borderRadius: '50%' }} variants={dotVariants} />
       </motion.div>
-      {/* --- MENSAJE DINÁMICO --- */}
+      {/* --- MENSAJE DINÁMICO =) --- */}
       <p className="mt-4 text-muted fw-light">{message}</p>
     </div>
   );
